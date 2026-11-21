@@ -458,7 +458,7 @@ namespace addOneSecond
             }
             catch { }
 
-            var tileContent = new Uri("https://bzhcyy.github.io/add-one-second-UWP/tile.xml");  //自建网站
+            var tileContent = new Uri("https://add-one-second.addonesecond.workers.dev/tile.xml");  //自建网站
             var requestedInterval = PeriodicUpdateRecurrence.HalfHour;   //半小时一次
 
             var updater = TileUpdateManager.CreateTileUpdaterForApplication();
