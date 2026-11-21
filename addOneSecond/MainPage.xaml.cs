@@ -33,7 +33,7 @@ namespace addOneSecond
     public sealed partial class MainPage : Page
     {
         DispatcherTimer timer;//定义定时器
-        Random rankey = new Random();
+        bool _loading = false;   //正在套用设置，别触发保存
 
         public MainPage()
         {
@@ -57,14 +57,20 @@ namespace addOneSecond
             Windows.ApplicationModel.Core.CoreApplication.GetCurrentView().TitleBar.ExtendViewIntoTitleBar = true;
             //覆盖电脑状态栏
 
-            try  //加载秒数统计
+            try  //加载秒数统计（只用来算实际时间）
             {
                 long total;
                 total = await GetTotalSecond();
                 SaveTotalSecond(total);
-                secondTotalShow.Text = $"你已经贡献了{total}秒";
             }
             catch { }
+
+            _loading = true;
+            isWorkerFirst.IsOn = TileSource.PreferWorker;
+            SelectIntervalInCombo();
+            _loading = false;
+
+            await LoadDailyQuote();
 
 
             if (Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase"))
@@ -83,50 +89,7 @@ namespace addOneSecond
 
         private async void Timer_Tick(object sender, object e)    //1s定时执行
         {
-            if (isAutoAddOneSecondOpen.IsOn)
-            {
-                PlayAudio();
-                this.addedOneSecondStoryboard.Begin();  //+1s动画
-                try
-                {
-                    SecondAdd();
-                }
-                catch { }
-            }
-            string result;
-            try
-            {
-                long allSeconds = 549682411;
-                long dd, mm, hh, ss;     //用于存储最终数值
-                dd = allSeconds / 60 / 60 / 24;
-                hh = allSeconds / 60 / 60 % 24;
-                mm = allSeconds / 60 % 60;
-                ss = allSeconds % 60;
-                result = $"{dd}:{hh.ToString().PadLeft(2,'0')}:{mm.ToString().PadLeft(2, '0')}:{ss.ToString().PadLeft(2, '0')}";
-                secondsShow.Text = result;  //显示结果
-            }
-            catch { }
             await ShowRealTime();
-        }
-
-        private async void secondGet_Click(object sender, RoutedEventArgs e)  //+1s按键
-        {
-            PlayAudio();
-            this.addedOneSecondStoryboard.Begin();  //+1s动画
-            try
-            {
-                SecondAdd();
-            }
-            catch { }
-        }
-
-        private void PlayAudio() //播放声音
-        {
-            if(MyMediaElement.CurrentState.ToString() != "Playing" && isPlayAudio.IsOn)
-            {
-                MyMediaElement.Source = new Uri("ms-appx:///Assets/wav/"+ rankey.Next(1,10)+ ".wav");
-                //MyMediaElement.Source = new Uri("ms-appx:///Assets/wav/coin.mp3");
-            }
         }
 
         private void settings_Click(object sender, RoutedEventArgs e)  //设置按钮
@@ -156,19 +119,6 @@ namespace addOneSecond
         {
             SaveSettings();
         }
-
-        private async void SecondAdd()
-        {
-            try
-            {
-                long total;
-                total = await GetTotalSecond();
-                total++;
-                SaveTotalSecond(total);
-                secondTotalShow.Text = $"你已经贡献了{total}秒";
-            }
-            catch { }
-        }   //本地计数+1s
 
         private async void SaveTotalSecond(long seconds)
         {
@@ -224,36 +174,30 @@ namespace addOneSecond
         private async void SaveSettings()    //保存设置
         {
             StorageFolder folder;
-            folder = ApplicationData.Current.RoamingFolder; //获取应用目录的文件夹
+            folder = ApplicationData.Current.RoamingFolder;
             try
             {
                 var file_demonstration = await folder.CreateFileAsync("settings", CreationCollisionOption.ReplaceExisting);
-                //创建文件
-
-
                 using (Stream file = await file_demonstration.OpenStreamForWriteAsync())
                 {
                     using (StreamWriter write = new StreamWriter(file))
                     {
-                        write.Write(string.Format("{0};{1};{2};{3};{4};{5};{6};{7};{8};{9};{10};{11}",
+                        write.Write(string.Format("{0};{1};{2};{3};{4};{5};{6};{7};{8};{9}",
                                                     isfullScreen.IsOn,
-                                                    isAutoAddOneSecondOpen.IsOn,
+                                                    isTileFresh.IsOn,
                                                     BackGroundColorRedSlider.Value,
                                                     BackGroundColorGreenSlider.Value,
                                                     BackGroundColorBlueSlider.Value,
                                                     FontColorRedSlider.Value,
                                                     FontColorGreenSlider.Value,
                                                     FontColorBlueSlider.Value,
-                                                    isTileFresh.IsOn,
                                                     isDisplayRequest.IsOn,
-                                                    isPlayAudio.IsOn,
                                                     BackGroundAcrylicBlueSlider.Value
                                                    ));
                     }
                 }
             }
             catch { }
-
         }
 
         private async void GetSettings()
@@ -262,15 +206,11 @@ namespace addOneSecond
             BackGroundColorGreenSlider.Value = 255;
             BackGroundColorBlueSlider.Value = 255;
 
-
             StorageFolder folder;
-            folder = ApplicationData.Current.RoamingFolder; //获取应用目录的文件夹
-
+            folder = ApplicationData.Current.RoamingFolder;
             var file_demonstration = await folder.CreateFileAsync("settings", CreationCollisionOption.OpenIfExists);
-            //创建文件
 
             string s;
-
             using (Stream file = await file_demonstration.OpenStreamForReadAsync())
             {
                 using (StreamReader read = new StreamReader(file))
@@ -278,120 +218,45 @@ namespace addOneSecond
                     s = read.ReadToEnd();
                 }
             }
-            
-            
-            if (s.IndexOf(";") >= 1 && s.IndexOf(";") != s.Length - 1)
+
+            if (!string.IsNullOrEmpty(s) && s.IndexOf(";") >= 1)
             {
-                string[] str2;
-                int count_temp = 0;
-                str2 = s.Split(';');
-                foreach (string i in str2)
+                string[] v = s.Split(';');
+                // 老版本存了 12 段（含已删除的自动+1s、音效），新版本 10 段；按段数判断
+                bool legacy = v.Length >= 12;
+                try
                 {
-                    if (count_temp == 0)
+                    if (v.Length > 0) isfullScreen.IsOn = (v[0] == "True");
+                    if (legacy)
                     {
-                        if (i.ToString() == "True")
-                        {
-                            isfullScreen.IsOn = true;
-                        }
-                        else
-                        {
-                            isfullScreen.IsOn = false;
-                        }
-                        count_temp++;
+                        BackGroundColorRedSlider.Value = double.Parse(v[2]);
+                        BackGroundColorGreenSlider.Value = double.Parse(v[3]);
+                        BackGroundColorBlueSlider.Value = double.Parse(v[4]);
+                        FontColorRedSlider.Value = double.Parse(v[5]);
+                        FontColorGreenSlider.Value = double.Parse(v[6]);
+                        FontColorBlueSlider.Value = double.Parse(v[7]);
+                        if (v.Length > 8) isTileFresh.IsOn = (v[8] == "True");
+                        if (v.Length > 9) isDisplayRequest.IsOn = (v[9] == "True");
+                        if (v.Length > 11) BackGroundAcrylicBlueSlider.Value = double.Parse(v[11]);
                     }
-                    else if (count_temp == 1)
+                    else
                     {
-                        if (i.ToString() == "True")
-                        {
-                            //isAutoAddOneSecondOpen.IsOn = true;
-                        }
-                        else
-                        {
-                            isAutoAddOneSecondOpen.IsOn = false;
-                        }
-                        count_temp++;
-                    }
-                    else if (count_temp == 2)
-                    {
-                        BackGroundColorRedSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 3)
-                    {
-                        BackGroundColorGreenSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 4)
-                    {
-                        BackGroundColorBlueSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 5)
-                    {
-                        FontColorRedSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 6)
-                    {
-                        FontColorGreenSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 7)
-                    {
-                        FontColorBlueSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
-                    }
-                    else if (count_temp == 8)
-                    {
-                        if (i.ToString() == "True")
-                        {
-                            isTileFresh.IsOn = true;
-                        }
-                        else
-                        {
-                            isTileFresh.IsOn = false;
-                        }
-                        count_temp++;
-                    }
-                    else if (count_temp == 9)
-                    {
-                        if (i.ToString() == "True")
-                        {
-                            isDisplayRequest.IsOn = true;
-                        }
-                        else
-                        {
-                            isDisplayRequest.IsOn = false;
-                        }
-                        count_temp++;
-                    }
-                    else if (count_temp == 10)
-                    {
-                        if (i.ToString() == "True")
-                        {
-                            isPlayAudio.IsOn = true;
-                        }
-                        else
-                        {
-                            isPlayAudio.IsOn = false;
-                        }
-                        count_temp++;
-                    }
-                    else if (count_temp == 11)
-                    {
-                        BackGroundAcrylicBlueSlider.Value = double.Parse(i.ToString());
-                        count_temp++;
+                        if (v.Length > 1) isTileFresh.IsOn = (v[1] == "True");
+                        if (v.Length > 2) BackGroundColorRedSlider.Value = double.Parse(v[2]);
+                        if (v.Length > 3) BackGroundColorGreenSlider.Value = double.Parse(v[3]);
+                        if (v.Length > 4) BackGroundColorBlueSlider.Value = double.Parse(v[4]);
+                        if (v.Length > 5) FontColorRedSlider.Value = double.Parse(v[5]);
+                        if (v.Length > 6) FontColorGreenSlider.Value = double.Parse(v[6]);
+                        if (v.Length > 7) FontColorBlueSlider.Value = double.Parse(v[7]);
+                        if (v.Length > 8) isDisplayRequest.IsOn = (v[8] == "True");
+                        if (v.Length > 9) BackGroundAcrylicBlueSlider.Value = double.Parse(v[9]);
                     }
                 }
+                catch { }
             }
             SetBcakGroundColor();
             SetForeColor();
         }   //加载设置
-
-        private void isAutoAddOneSecondOpen_Toggled(object sender, RoutedEventArgs e)  //自动+1s开关按键
-        {
-            isAutoAddOneSecondOpen.IsOn = false;
-        }
 
         private void BackGroundColorRedSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)  //背景颜色调节
         {
@@ -430,40 +295,128 @@ namespace addOneSecond
             {
                 await setLiveTile();
             }
-            SaveSettings();
+            else
+            {
+                try
+                {
+                    TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate();
+                }
+                catch { }
+            }
+            if (!_loading) SaveSettings();
         }
 
 
         private async Task setLiveTile()   //开启磁贴
         {
+            await RestartTileUpdate();
+        }
+
+        // 按设置的间隔重新开始周期更新
+        private async Task RestartTileUpdate()
+        {
             try
             {
-                TimeSpan tn = DateTime.UtcNow - new DateTime(1970, 1, 1, 0, 0, 0, 0);
-                long allSeconds = 105695630 + ((long)tn.TotalSeconds - 1606379872) * 7;
-                long dd, mm, hh, ss;     //用于存储最终数值
-                dd = allSeconds / 60 / 60 / 24 % 9999999;
-                hh = allSeconds / 60 / 60 % 24;
-                mm = allSeconds / 60 % 60;
-                ss = allSeconds % 60;
-
-                var tileXml = TileUpdateManager.GetTemplateContent(TileTemplateType.TileSquare150x150Text01);
-
-                var tileAttributes = tileXml.GetElementsByTagName("text");
-                tileAttributes[0].AppendChild(tileXml.CreateTextNode("时间众筹总计"));
-                tileAttributes[1].AppendChild(tileXml.CreateTextNode(dd + "天"));
-                tileAttributes[2].AppendChild(tileXml.CreateTextNode(hh + "小时"));
-                tileAttributes[3].AppendChild(tileXml.CreateTextNode(mm + "分钟"));
-                var tileNotification = new TileNotification(tileXml);
-                TileUpdateManager.CreateTileUpdaterForApplication().Update(tileNotification);
+                var uri = await TileSource.ResolveAsync();
+                TileUpdateManager.CreateTileUpdaterForApplication()
+                    .StartPeriodicUpdate(uri, ParseInterval(TileIntervalTag));
             }
             catch { }
+        }
 
-            // Worker 拉不到会自动退回 Pages（见 TileSource.cs）
-            var tileContent = await TileSource.ResolveAsync();
-            var requestedInterval = PeriodicUpdateRecurrence.HalfHour;   //半小时一次
+        // ---------------- 磁贴间隔 ----------------
+        private string TileIntervalTag
+        {
+            get
+            {
+                var v = ApplicationData.Current.RoamingSettings.Values["tileInterval"];
+                return (v as string) ?? "HalfHour";
+            }
+            set { ApplicationData.Current.RoamingSettings.Values["tileInterval"] = value; }
+        }
 
-            var updater = TileUpdateManager.CreateTileUpdaterForApplication();
-            updater.StartPeriodicUpdate(tileContent, requestedInterval);
+        private static PeriodicUpdateRecurrence ParseInterval(string tag)
+        {
+            switch (tag)
+            {
+                case "Hour": return PeriodicUpdateRecurrence.Hour;
+                case "SixHours": return PeriodicUpdateRecurrence.SixHours;
+                case "TwelveHours": return PeriodicUpdateRecurrence.TwelveHours;
+                case "Daily": return PeriodicUpdateRecurrence.Daily;
+                default: return PeriodicUpdateRecurrence.HalfHour;
+            }
+        }
+
+        private void SelectIntervalInCombo()
+        {
+            var tag = TileIntervalTag;
+            foreach (ComboBoxItem item in tileIntervalCombo.Items)
+            {
+                if ((string)item.Tag == tag)
+                {
+                    tileIntervalCombo.SelectedItem = item;
+                    return;
+                }
+            }
+            tileIntervalCombo.SelectedIndex = 0;
+        }
+
+        private void tileIntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileIntervalCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileIntervalTag = (string)item.Tag;
+            if (_loading) return;
+            if (isTileFresh.IsOn)
+            {
+                var ignored = RestartTileUpdate();
+            }
+        }
+
+        private async void isWorkerFirst_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_loading) return;
+            TileSource.PreferWorker = isWorkerFirst.IsOn;
+            if (isTileFresh.IsOn)
+            {
+                await RestartTileUpdate();
+            }
+            await LoadDailyQuote();
+        }
+
+        // ---------------- 每日一言 ----------------
+        private async Task LoadDailyQuote()
+        {
+            try
+            {
+                var uri = await TileSource.ResolveAsync();
+                using (var http = new System.Net.Http.HttpClient())
+                {
+                    http.Timeout = TimeSpan.FromSeconds(8);
+                    var xml = await http.GetStringAsync(uri);
+                    var doc = System.Xml.Linq.XDocument.Parse(xml);
+                    var large = doc.Descendants("binding")
+                                    .Where(b => (string)b.Attribute("template") == "TileLarge")
+                                    .FirstOrDefault()
+                                ?? doc.Descendants("binding").LastOrDefault();
+                    var texts = large == null
+                        ? new System.Collections.Generic.List<string>()
+                        : large.Elements("text").Select(x => x.Value).ToList();
+
+                    var body = texts.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && x.Trim() != "每日一言");
+                    var from = texts.LastOrDefault();
+
+                    dailyQuoteText.Text = string.IsNullOrWhiteSpace(body) ? "（暂时取不到每日一言）" : body.Trim();
+                    dailyQuoteFrom.Text = (from != null && from != body && from.Trim().StartsWith("—"))
+                        ? from.Trim()
+                        : "";
+                }
+            }
+            catch
+            {
+                dailyQuoteText.Text = "（暂时取不到每日一言，请检查网络）";
+                dailyQuoteFrom.Text = "";
+            }
         }
 
         private Windows.System.Display.DisplayRequest _displayRequest;
@@ -493,9 +446,8 @@ namespace addOneSecond
         private void SetForeColor()  //设置字体颜色
         {
             SolidColorBrush color = new SolidColorBrush(Color.FromArgb(255, (byte)FontColorRedSlider.Value, (byte)FontColorGreenSlider.Value, (byte)FontColorBlueSlider.Value));
-            secondsShow.Foreground = color;    //应用字体颜色
-            secondGet.Foreground = color;
-            addedOneSecondTextBlock.Foreground = color;
+            dailyQuoteText.Foreground = color;    //应用字体颜色
+            dailyQuoteFrom.Foreground = color;
             settings.Foreground = color;
             secondTotalShow.Foreground = color;
             realTime.Foreground = color;
@@ -562,23 +514,6 @@ namespace addOneSecond
 
         public void openAuto()  //语音调用的东西
         {
-            //isAutoAddOneSecondOpen.IsOn = true;
-        }
-
-        private async void isPlayAudio_Toggled(object sender, RoutedEventArgs e)   //音效开关按钮
-        {
-            try
-            {
-                if (await GetTotalSecond() < 2333)
-                {
-                    isPlayAudio.IsOn = false;
-                }
-            }
-            catch
-            {
-                isPlayAudio.IsOn = false;
-            }
-            SaveSettings();
         }
 
         private void BackGroundAcrylicBlueSlider_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
