@@ -90,7 +90,7 @@ jobs:
             echo "OK：App 清单与 Pages 地址一致"
           fi
 
-      - name: 确保 Pages 已启用（没开就自动开）
+      - name: 检查 Pages 是否已启用
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -99,11 +99,19 @@ jobs:
             try {
               const { data } = await github.rest.repos.getPages({ owner, repo });
               core.info(`Pages 已启用：${data.html_url}（build_type=${data.build_type}）`);
+              if (data.build_type !== 'workflow') {
+                core.warning(`Pages 的 Source 现在是 ${data.build_type}，要改成 GitHub Actions，否则下面的部署会失败`);
+              }
             } catch (e) {
               if (e.status !== 404) throw e;
-              core.warning('Pages 没有启用，尝试用 GitHub Actions 方式自动开启…');
-              await github.rest.repos.createPagesSite({ owner, repo, build_type: 'workflow' });
-              core.info('已开启 Pages（build_type=workflow）');
+              core.warning('仓库还没启用 Pages。GITHUB_TOKEN 没有建站权限，只能手动开：');
+              core.warning('Settings → Pages → Build and deployment → Source 选 GitHub Actions，然后重跑本工作流。');
+              try {
+                await github.rest.repos.createPagesSite({ owner, repo, build_type: 'workflow' });
+                core.info('已自动开启 Pages（build_type=workflow）');
+              } catch (err) {
+                core.warning(`自动开启失败（${err.message}），请按上面的路径手动开启。`);
+              }
             }
 
       - name: 配置 Pages
