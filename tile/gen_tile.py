@@ -279,7 +279,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="refresh" content="60">
-<title>+1s 磁贴服务器</title>
+<title>一言 Tile 磁贴服务器</title>
 <style>
   :root { color-scheme: dark; }
   body { margin:0; background:#141414; color:#e8e8e8;
@@ -301,7 +301,7 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <main>
-  <h1>+1s 磁贴服务器</h1>
+  <h1>一言 Tile 磁贴服务器</h1>
   <p class="ok">● 运行中 · 每 30 分钟自动更新一次</p>
   <dl>
     <dt>生成时间</dt><dd>__TIME__</dd>
