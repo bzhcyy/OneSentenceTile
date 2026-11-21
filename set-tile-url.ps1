@@ -1,128 +1,132 @@
-﻿# 把磁贴服务器地址一次性写进 UWP 工程（manifest + MainPage.xaml.cs + tile/config.json）
+﻿# 设置磁贴服务器地址（Worker + Pages 两个）
 #
 # 用法（在仓库根目录）：
-#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -BaseUrl https://<用户名>.github.io/<仓库名>
-# 加 -Verify 会在改完后立刻拉一次 https://.../tile.xml 检查是不是真的磁贴 XML。
-# 国内网络建议加 -Proxy http://127.0.0.1:7897。
+#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -WorkerUrl https://add-one-second.addonesecond.workers.dev
+#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/add-one-second-UWP
+#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -WorkerUrl https://a.workers.dev -PagesUrl https://b.github.io/x
 #
-# 说明：
-#   - BaseUrl 只写到 Pages 根（不要带 /tile.xml），脚本自己拼 /tile.xml
-#   - 幂等：重复运行只会把地址替换成新地址
-#   - 会保留文件原有的 BOM / 编码，避免中文注释乱码
+# 只写其中一个也行，另一个保持原值。地址可以带 /tile.xml，也可以只写根，脚本会自动补。
+#
+# 它改三处：
+#   1. addOneSecond/TileSource.cs 的 Worker / Pages 常量（App 运行时优先 Worker，连不上退 Pages）
+#   2. addOneSecond/Package.appxmanifest 的 UriTemplate（App 没运行时用的默认地址，写 Pages）
+#   3. tile/config.json 的 baseUrl（Pages 生成器用）
+#
+# 加 -Verify 会依次真的 GET 两个地址，看谁返回 <tile。
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [string]$WorkerUrl,
+    [string]$PagesUrl,
+
+    # 兼容旧用法：-BaseUrl 等同于 -WorkerUrl
     [string]$BaseUrl,
 
     [string]$RepoRoot,
-
     [string]$Proxy,
-
     [switch]$Verify
 )
 
 $ErrorActionPreference = 'Stop'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 function Read-Utf8Text([string]$Path) {
     $bytes = [System.IO.File]::ReadAllBytes($Path)
-    $hasBom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
-    $text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8)
-    return [pscustomobject]@{ Text = $text; HasBom = $hasBom }
+    $bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+    return [pscustomobject]@{ Text = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8); Bom = $bom }
 }
-
 function Write-Utf8Text([string]$Path, [string]$Text, [bool]$Bom) {
-    $enc = New-Object System.Text.UTF8Encoding($Bom)
-    [System.IO.File]::WriteAllText($Path, $Text, $enc)
+    [System.IO.File]::WriteAllText($Path, $Text, (New-Object System.Text.UTF8Encoding($Bom)))
+}
+function Normalize-TileUrl([string]$url) {
+    $u = $url.Trim().TrimEnd('/')
+    if ($u -notmatch '^https://[^/\s]+') { throw "必须是 https 地址：$url" }
+    if ($u -notmatch '\.xml$') { $u = "$u/tile.xml" }
+    return $u
 }
 
-# ---- 规范化地址 ----
-if (-not $RepoRoot) {
-    $RepoRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
+if (-not $RepoRoot) { $RepoRoot = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path } }
+if (-not $WorkerUrl -and $BaseUrl) { $WorkerUrl = $BaseUrl }
+if (-not $WorkerUrl -and -not $PagesUrl) {
+    throw '至少给一个：-WorkerUrl 或 -PagesUrl（例：-WorkerUrl https://xxx.workers.dev）'
 }
-$BaseUrl = $BaseUrl.Trim().TrimEnd('/')
-if ($BaseUrl -notmatch '^https://[^/\s]+') {
-    throw "BaseUrl 必须是 https 地址，例如 https://yourname.github.io/add-one-second-UWP（当前：$BaseUrl）"
-}
-$tileUrl = "$BaseUrl/tile.xml"
-Write-Host "磁贴根地址 : $BaseUrl"
-Write-Host "磁贴 XML   : $tileUrl"
-Write-Host "仓库根目录 : $RepoRoot"
-Write-Host ''
 
+$tileSource = Join-Path $RepoRoot 'addOneSecond\TileSource.cs'
 $manifest = Join-Path $RepoRoot 'addOneSecond\Package.appxmanifest'
-$mainpage = Join-Path $RepoRoot 'addOneSecond\MainPage.xaml.cs'
 $config = Join-Path $RepoRoot 'tile\config.json'
-
-foreach ($f in @($manifest, $mainpage)) {
+foreach ($f in @($tileSource, $manifest)) {
     if (-not (Test-Path $f)) { throw "找不到文件：$f（请在仓库根目录运行，或用 -RepoRoot 指定）" }
 }
 
-# ---- 1. Package.appxmanifest 的 UriTemplate ----
-$m = Read-Utf8Text $manifest
-if ($m.Text -notmatch 'UriTemplate="[^"]*"') { throw '清单里没找到 UriTemplate 属性，可能改错了文件' }
-$m2 = [regex]::Replace($m.Text, 'UriTemplate="[^"]*"', "UriTemplate=`"$tileUrl`"")
-Write-Utf8Text $manifest $m2 $m.HasBom
-Write-Host "[ok] Package.appxmanifest -> $tileUrl"
+Write-Host "仓库根目录: $RepoRoot"
 
-# ---- 2. MainPage.xaml.cs 的 StartPeriodicUpdate 地址 ----
-$c = Read-Utf8Text $mainpage
-$pattern = '(\$?tileContent\s*=\s*new Uri\(")[^"]*(")'
-if ($c.Text -notmatch $pattern) { throw 'MainPage.xaml.cs 里没找到 tileContent = new Uri("...")，可能改错了文件' }
-$c2 = [regex]::Replace($c.Text, $pattern, "`${1}$tileUrl`${2}")
-Write-Utf8Text $mainpage $c2 $c.HasBom
-Write-Host "[ok] MainPage.xaml.cs      -> $tileUrl"
+# ---------- 1. TileSource.cs ----------
+$ts = Read-Utf8Text $tileSource
+$text = $ts.Text
+if ($WorkerUrl) {
+    $w = Normalize-TileUrl $WorkerUrl
+    $text = [regex]::Replace($text, 'public const string Worker = "[^"]*";', "public const string Worker = `"$w`";")
+    Write-Host "[ok] Worker -> $w"
+}
+if ($PagesUrl) {
+    $p = Normalize-TileUrl $PagesUrl
+    $text = [regex]::Replace($text, 'public const string Pages = "[^"]*";', "public const string Pages = `"$p`";")
+    Write-Host "[ok] Pages  -> $p"
+}
+Write-Utf8Text $tileSource $text $ts.Bom
 
-# ---- 3. tile/config.json 的 baseUrl（给生成器用）----
+# ---------- 2. manifest（默认地址用当前 Pages）----------
+$pagesFinal = [regex]::Match($text, 'public const string Pages = "([^"]*)"').Groups[1].Value
+$mf = Read-Utf8Text $manifest
+if ($mf.Text -match 'UriTemplate="[^"]*"') {
+    $m2 = [regex]::Replace($mf.Text, 'UriTemplate="[^"]*"', "UriTemplate=`"$pagesFinal`"")
+    Write-Utf8Text $manifest $m2 $mf.Bom
+    Write-Host "[ok] manifest UriTemplate -> $pagesFinal"
+}
+
+# ---------- 3. tile/config.json（Pages 生成器）----------
 if (Test-Path $config) {
-    $cfgFile = Read-Utf8Text $config
-    if ($cfgFile.Text -match '"baseUrl"\s*:\s*"[^"]*"') {
-        # 只替换值，保留原有缩进/键顺序
-        $newCfg = [regex]::Replace($cfgFile.Text, '"baseUrl"\s*:\s*"[^"]*"', "`"baseUrl`": `"$BaseUrl`"")
-        Write-Utf8Text $config $newCfg $cfgFile.HasBom
-        Write-Host "[ok] tile/config.json      -> $BaseUrl"
+    $cf = Read-Utf8Text $config
+    $pagesBase = $pagesFinal -replace '/tile\.xml$', ''
+    if ($cf.Text -match '"baseUrl"\s*:\s*"[^"]*"') {
+        $c2 = [regex]::Replace($cf.Text, '"baseUrl"\s*:\s*"[^"]*"', "`"baseUrl`": `"$pagesBase`"")
+        Write-Utf8Text $config $c2 $cf.Bom
+        Write-Host "[ok] tile/config.json baseUrl -> $pagesBase"
     }
-    else {
-        Write-Warning 'tile/config.json 里没有 baseUrl 字段，跳过（生成器会按 TILE_BASE_URL / GITHUB_REPOSITORY 推算）'
-    }
-}
-else {
-    Write-Warning "没找到 tile/config.json，跳过（生成器会用演练推算或 TILE_BASE_URL）"
 }
 
-# ---- 4. 可选：立刻验一次 ----
+# ---------- 4. 可选验活 ----------
 if ($Verify) {
     Write-Host ''
-    Write-Host "正在拉取 $tileUrl ..."
     Add-Type -AssemblyName System.Net.Http
-    $handler = New-Object System.Net.Http.HttpClientHandler
-    if ($Proxy) {
-        $handler.Proxy = New-Object System.Net.WebProxy($Proxy, $true)
-        $handler.UseProxy = $true
-        Write-Host "（走代理 $Proxy）"
-    }
-    $client = New-Object System.Net.Http.HttpClient($handler)
-    $client.Timeout = [TimeSpan]::FromSeconds(25)
-    try {
-        $resp = $client.GetAsync($tileUrl).GetAwaiter().GetResult()
-        $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
-        Write-Host ("HTTP " + [int]$resp.StatusCode)
-        if ($body -match '<tile') {
-            Write-Host '[ok] 返回的是磁贴 XML' -ForegroundColor Green
-            Write-Host ($body.Substring(0, [Math]::Min(300, $body.Length)))
+    $pairs = @()
+    $wFinal = [regex]::Match($text, 'public const string Worker = "([^"]*)"').Groups[1].Value
+    if ($wFinal) { $pairs += @{ Name = 'Worker'; Url = $wFinal } }
+    if ($pagesFinal) { $pairs += @{ Name = 'Pages'; Url = $pagesFinal } }
+
+    foreach ($item in $pairs) {
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        if ($Proxy) {
+            $handler.Proxy = New-Object System.Net.WebProxy($Proxy, $true)
+            $handler.UseProxy = $true
         }
-        else {
-            Write-Host '[!] 返回内容不是磁贴 XML（部署还没生效？先看 /health.json）' -ForegroundColor Yellow
-            Write-Host ($body.Substring(0, [Math]::Min(300, $body.Length)))
+        $client = New-Object System.Net.Http.HttpClient($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(12)
+        try {
+            $resp = $client.GetAsync($item.Url).GetAwaiter().GetResult()
+            $body = $resp.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+            $ok = $body -match '<tile'
+            $mark = if ($ok) { '可用' } else { '返回内容不是磁贴 XML' }
+            Write-Host ("[{0}] HTTP {1}  {2}  {3}" -f $item.Name, [int]$resp.StatusCode, $mark, $item.Url)
         }
+        catch {
+            Write-Host ("[{0}] 连不上：{1}  {2}" -f $item.Name, $_.Exception.Message.Split("`n")[0], $item.Url) -ForegroundColor Yellow
+        }
+        finally { $client.Dispose() }
     }
-    catch {
-        Write-Warning ("验活失败：" + $_.Exception.Message + "（首次部署前是正常的）")
-    }
-    finally {
-        $client.Dispose()
-    }
+    Write-Host ''
+    Write-Host '提示：Worker 不通属正常（workers.dev 在国内常被 DNS 污染），App 会自动退回 Pages。' -ForegroundColor Cyan
 }
 
 Write-Host ''
-Write-Host '改完了。提交后记得在 Actions 里跑一次 Build UWP package，重新装包才会用上新地址。'
+Write-Host '改完提交，再跑一次 Build UWP package 装新包（地址是编译进包里的，必须重装）。'

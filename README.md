@@ -9,17 +9,28 @@
 
 App 当前指向 **Worker**（`Package.appxmanifest` 与 `MainPage.xaml.cs`）。
 
-## 怎么切换
+## 自动切换（Worker 挂了自动用 Pages）
+
+App 里的逻辑在 `addOneSecond/TileSource.cs`：
+
+1. **每次启动 App**（`App.OnLaunched`）都会探一次 Worker：GET `/tile.xml`，4 秒超时，
+   返回内容里出现 `<tile` 才算「通」；
+2. 通 → 用 Worker（每次现取，缓存 1 小时）；不通 → 用 Pages；
+3. 探测是异步的，不卡界面；探完立刻 `StartPeriodicUpdate(选中的地址, HalfHour)`；
+4. 清单里的 `<uap:TileUpdate>` 默认写 **Pages**——App 从没打开过也不会白板。
+
+手动改地址（两个都能单独改，只写一个另一个保持原值）：
 
 ```powershell
-# 切到 Pages（github.io 国内更稳）
-.\set-tile-url.ps1 -BaseUrl https://bzhcyy.github.io/add-one-second-UWP
-
-# 切回 Worker
-.\set-tile-url.ps1 -BaseUrl https://add-one-second.addonesecond.workers.dev
+.\set-tile-url.ps1 -WorkerUrl https://add-one-second.addonesecond.workers.dev
+.\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/add-one-second-UWP
+.\set-tile-url.ps1 -WorkerUrl https://a.workers.dev -PagesUrl https://b.github.io/x -Verify   # 顺带验活
 ```
 
-改完 push → Actions 跑一次 **Build UWP package** → 装新包。改地址只需两行，不用改代码。
+改完 push → 跑一次 **Build UWP package** → 装新包（地址是编译进包里的）。
+
+> 限制：探测只在 App 启动时做。App 长期不打开，磁贴就一直按清单里的 Pages 地址更新；
+> 想让它在后台也能切换，需要加后台任务（`ApplicationTrigger`/`MaintenanceTrigger`），没必要。
 
 ## 两个前提
 
