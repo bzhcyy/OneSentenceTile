@@ -149,3 +149,26 @@ python tile\gen_tile.py --out _site --base-url https://yourname.github.io/your-r
 
 把 `Package.appxmanifest` 和 `MainPage.xaml.cs` 的地址改回 `https://add-one-second.papapoi.workers.dev/`
 （或任何新的服务器地址）重新打包即可；`tile/` 和工作流留着不碍事。
+
+## 九、一键上传（不用装 Git）
+
+仓库根目录里有 `push-to-github.ps1`，用 GitHub API 一次性同步（新增/修改/**删除**都算），
+而且只产生**一个提交**——用网页拖文件的办法删不掉多余的 76 个旧文件，这个可以。
+
+1. 建 Token：GitHub → Settings → Developer settings → Personal access tokens →
+   **Fine-grained tokens** → 新建，`Repository access` 只选这个仓库，
+   `Permissions → Contents` 选 **Read and write**。
+2. 在解压出来的目录里跑（先 DryRun 看一眼清单）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token ghp_你的token -DryRun
+powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token ghp_你的token
+```
+
+可选参数：`-Repo bzhcyy/add-one-second-UWP`、`-Branch master`、`-Message "..."`、
+`-Proxy http://127.0.0.1:7897`（走代理时）。脚本会自动跳过自身、`_site/`、`build/`、`*.pfx`。
+
+跑完会打印 commit 链接；Actions 会自动重新生成磁贴（`tile/**` 有变动即触发）。
+
+> 嫌建 Token 麻烦的话：装个 GitHub Desktop，把这堆文件放进本地克隆目录，
+> 它会自动列出「删除的文件」，直接 Commit + Push 也一样。
