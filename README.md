@@ -1,20 +1,46 @@
-# +1s 磁贴服务器
+# +1s 磁贴服务器（Worker + Pages 双份）
 
-## 现在用的是 Cloudflare Worker（不再依赖 GitHub Pages）
+两个服务器同时在线，内容格式完全一致，随时可以换：
 
-磁贴地址：`https://add-one-second.addonesecond.workers.dev/tile.xml`
-Worker 源码：`worker.js`（我这边单独给的文件，未放进仓库）
+| | 地址 | 说明 |
+|---|---|---|
+| **主：Cloudflare Worker** | `https://add-one-second.addonesecond.workers.dev/tile.xml` | 每次请求现取一言，无缓存、无需定时任务；免费 10 万请求/天 |
+| **备：GitHub Pages** | `https://bzhcyy.github.io/add-one-second-UWP/tile.xml` | 每小时生成一次；`github.io` 国内基本可直连 |
 
-- 每次请求现取一条「每日一言」（`https://v1.hitokoto.cn/` 随机类型），接口挂了回落到内置语录
-- 免费额度 10 万请求/天，磁贴每 30 分钟拉一次 ≈ 48 次/天
-- **不需要 Pages、不需要 Actions 定时任务、不需要提交代码**
+App 当前指向 **Worker**（`Package.appxmanifest` 与 `MainPage.xaml.cs`）。
 
-App 里的地址已经改好（`Package.appxmanifest` 与 `MainPage.xaml.cs` 都指向 `/tile.xml`），
-推上去跑一次 **Build UWP package** 装新包即可。
+## 怎么切换
 
-> `workers.dev` 子域在国内常被 DNS 污染。磁贴不刷新时先确认能打开
-> `https://add-one-second.addonesecond.workers.dev/health`；打不开就在 Worker 里绑自定义域名
-> （Settings → Domains & Routes → Custom domain），再用 `set-tile-url.ps1 -BaseUrl https://你的域名` 换地址。
+```powershell
+# 切到 Pages（github.io 国内更稳）
+.\set-tile-url.ps1 -BaseUrl https://bzhcyy.github.io/add-one-second-UWP
+
+# 切回 Worker
+.\set-tile-url.ps1 -BaseUrl https://add-one-second.addonesecond.workers.dev
+```
+
+改完 push → Actions 跑一次 **Build UWP package** → 装新包。改地址只需两行，不用改代码。
+
+## 两个前提
+
+1. **Pages 备份要真的能跑**：Settings → Pages → Source 选 **GitHub Actions**，否则
+   `Publish live tile` 每小时都会红一次（可以先去 Actions 里 **Disable workflow** 关掉它）。
+2. **Worker 在国内的可用性**：`workers.dev` 子域常被 DNS 污染，磁贴不刷新时先开浏览器验证
+   `…/health`。要彻底稳定，需要绑一个自己的域名（见下）。
+
+## 关于域名要不要花钱
+
+Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你截图里 `addonesecondtile.com` 是 $11.17/年）。
+三条路线：
+
+- **不花钱，用 github.io**（推荐先这样）：Pages 免费、国内基本能通，就是内容每小时更新一次。
+- **花几块钱买个便宜域名**：`.top` / `.xyz` 首年常见 ¥1–10（阿里云/腾讯云/Namecheap/Porkbun），
+  注册后把 NS 指到 Cloudflare（免费套餐），再在 Worker → Settings → Domains & Routes → Custom domain 绑定。
+  之后每年续费也就几块到十几块。**这是让 Worker 在国内稳定的唯一可靠办法。**
+- **免费子域**（is-a.dev、js.org、eu.org）：只能 CNAME 到静态托管（如 `*.pages.dev`），
+  **绑不了 Worker 自定义域名**（Worker 要求域名托管在 Cloudflare），而且都要审核、等几天起步。
+
+一句话：想用 Worker + 自定义域名，绕不开一个真域名；不想花钱就用 github.io，两套并存正好互补。
 
 ---
 
