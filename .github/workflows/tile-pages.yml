@@ -90,6 +90,22 @@ jobs:
             echo "OK：App 清单与 Pages 地址一致"
           fi
 
+      - name: 确保 Pages 已启用（没开就自动开）
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            try {
+              const { data } = await github.rest.repos.getPages({ owner, repo });
+              core.info(`Pages 已启用：${data.html_url}（build_type=${data.build_type}）`);
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              core.warning('Pages 没有启用，尝试用 GitHub Actions 方式自动开启…');
+              await github.rest.repos.createPagesSite({ owner, repo, build_type: 'workflow' });
+              core.info('已开启 Pages（build_type=workflow）');
+            }
+
       - name: 配置 Pages
         uses: actions/configure-pages@v5
 
@@ -97,6 +113,23 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
+
+      - name: 失败时给排查提示
+        if: failure()
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### 这次部署失败了，按顺序检查
+
+          1. **Settings → Pages → Source 是不是 GitHub Actions**
+             （选 None 或 Deploy from a branch 都会让站点变成 404 Site not found）
+          2. **仓库是不是 public**：免费账号的 Pages 只支持公开仓库，改成 private 会直接把站点下线
+          3. 是不是有人点了 **Unpublish site**：重新选 Source 再重跑本工作流
+          4. 仓库改名/转移过：磁贴地址要跟着改（跑 `set-tile-url.ps1` 后重新打包 App）
+
+          工作流开头会尝试自动开启 Pages；如果那一步也报错（多半是权限或仓库是 private），
+          按上面 1、2 手动处理即可。
+          EOF
 
   deploy:
     needs: build
