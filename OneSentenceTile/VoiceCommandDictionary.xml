@@ -4,7 +4,7 @@
     <AppName> 一言 </AppName>
     <Example> 一秒 </Example>
 
-    <Command Name="addOneSecond">
+    <Command Name="OneSentenceTile">
       <Example> 一秒 </Example>
       <ListenFor> 一秒 </ListenFor>
       <Feedback> excited！这是坠吼的！ </Feedback>

@@ -18,7 +18,7 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 
-namespace addOneSecond
+namespace OneSentenceTile
 {
     /// <summary>
     /// 提供特定于应用程序的行为，以补充默认的应用程序类。
@@ -139,7 +139,7 @@ namespace addOneSecond
             Frame rootFrame = Window.Current.Content as Frame;
             MainPage page = rootFrame.Content as MainPage;
 
-            if (voiceCommandName == "addOneSecond")
+            if (voiceCommandName == "OneSentenceTile")
             {
                 page.openAuto();
             }

@@ -4,14 +4,14 @@
 
 | | 地址 | 说明 |
 |---|---|---|
-| **主：Cloudflare Worker** | `https://add-one-second.addonesecond.workers.dev/tile.xml` | 每次请求现取一言，无缓存、无需定时任务；免费 10 万请求/天 |
-| **备：GitHub Pages** | `https://bzhcyy.github.io/add-one-second-UWP/tile.xml` | 每小时生成一次；`github.io` 国内基本可直连 |
+| **主：Cloudflare Worker** | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取一言，无缓存、无需定时任务；免费 10 万请求/天 |
+| **备：GitHub Pages** | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | 每小时生成一次；`github.io` 国内基本可直连 |
 
 App 当前指向 **Worker**（`Package.appxmanifest` 与 `MainPage.xaml.cs`）。
 
 ## 自动切换（Worker 挂了自动用 Pages）
 
-App 里的逻辑在 `addOneSecond/TileSource.cs`：
+App 里的逻辑在 `OneSentenceTile/TileSource.cs`：
 
 1. **每次启动 App**（`App.OnLaunched`）都会探一次 Worker：GET `/tile.xml`，4 秒超时，
    返回内容里出现 `<tile` 才算「通」；
@@ -22,8 +22,8 @@ App 里的逻辑在 `addOneSecond/TileSource.cs`：
 手动改地址（两个都能单独改，只写一个另一个保持原值）：
 
 ```powershell
-.\set-tile-url.ps1 -WorkerUrl https://add-one-second.addonesecond.workers.dev
-.\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/add-one-second-UWP
+.\set-tile-url.ps1 -WorkerUrl https://onesentencetile.onesentencetile.workers.dev
+.\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/OneSentenceTile
 .\set-tile-url.ps1 -WorkerUrl https://a.workers.dev -PagesUrl https://b.github.io/x -Verify   # 顺带验活
 ```
 
@@ -90,7 +90,7 @@ Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你�
 | **一言分类**（新） | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 来自网络 / 其他 / 影视 / 诗词 / 哲学 / 抖机灵 |
 | 屏幕常亮 | 不变 |
 | 背景/字体颜色 | 不变 |
-| 本项目地址（新） | `https://github.com/bzhcyy/add-one-second-UWP` |
+| 本项目地址（新） | `https://github.com/bzhcyy/OneSentenceTile` |
 
 **删掉**：自动 +1s 开关、音效开关（含 2333 秒限制）、关闭软件后语音指令那段说明、整段「关于」。
 
@@ -117,7 +117,7 @@ Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你�
 
 - 一个 GitHub Actions 定时任务（每 30 分钟）重新生成 `tile.xml`
 - 通过 Pages 部署成静态站点：`https://<owner>.github.io/<repo>/tile.xml`
-- 图片直接从仓库里的 `addOneSecond/Assets/pic/*.png` 发布成 `https://.../pic/<n>.png`
+- 图片直接从仓库里的 `OneSentenceTile/Assets/pic/*.png` 发布成 `https://.../pic/<n>.png`
 
 不需要 Cloudflare 账号，不需要 VPS，不需要任何服务器常驻进程。
 
@@ -146,8 +146,8 @@ set-tile-url.ps1                 # 把磁贴地址写进 manifest + MainPage.xam
    ```
 
    它会把三处改一致：
-   - `addOneSecond/Package.appxmanifest` 的 `<uap:TileUpdate UriTemplate="...">`
-   - `addOneSecond/MainPage.xaml.cs` 的 `tileContent = new Uri("...")`
+   - `OneSentenceTile/Package.appxmanifest` 的 `<uap:TileUpdate UriTemplate="...">`
+   - `OneSentenceTile/MainPage.xaml.cs` 的 `tileContent = new Uri("...")`
    - `tile/config.json` 的 `baseUrl`
 
    > 仓库名带大写时，Pages 地址里的**用户名必须小写**、仓库名按创建时的写法。
@@ -212,7 +212,7 @@ set-tile-url.ps1                 # 把磁贴地址写进 manifest + MainPage.xam
 > 想换成照片，直接填一个公网 https 图片地址（≤1024×1024、≤200KB）。
 
 - 换语录：改 `tile/quotes.json`（字符串数组，别写 `&`、`<` 这类字符也行，生成器会转义）。
-- 换图片：替换 `addOneSecond/Assets/pic/N.png`。要求：**≤ 1024×1024、≤ 200KB**
+- 换图片：替换 `OneSentenceTile/Assets/pic/N.png`。要求：**≤ 1024×1024、≤ 200KB**
   （系统的硬限制，超了磁贴直接不显示；现有图片是 300×300、最大 168KB，刚好安全）。
 - 改完 push 即可，工作流会重新生成并部署。
 
@@ -275,7 +275,7 @@ powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token github_pat_
 powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token github_pat_你的token
 ```
 
-可选参数：`-Repo bzhcyy/add-one-second-UWP`、`-Branch master`、`-Message "..."`、
+可选参数：`-Repo bzhcyy/OneSentenceTile`、`-Branch master`、`-Message "..."`、
 `-Proxy http://127.0.0.1:7897`（走代理时）。脚本会自动跳过自身、`_site/`、`build/`、`*.pfx`。
 
 跑完会打印 commit 链接；Actions 会自动重新生成磁贴（`tile/**` 有变动即触发）。

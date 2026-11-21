@@ -148,7 +148,7 @@ def fetch_hitokoto(url):
     """拉一条一言；失败返回 (None, 错误信息)。"""
     try:
         req = urllib.request.Request(url, headers={
-            "User-Agent": "add-one-second-tile/1.0 (+https://github.com/bzhcyy/add-one-second-UWP)",
+            "User-Agent": "add-one-second-tile/1.0 (+https://github.com/bzhcyy/OneSentenceTile)",
             "Accept": "application/json",
         })
         with urllib.request.urlopen(req, timeout=12) as r:

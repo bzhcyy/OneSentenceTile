@@ -7,8 +7,8 @@
     <ProjectGuid>{E0318F57-E451-4247-BC82-78356E17D3AA}</ProjectGuid>
     <OutputType>AppContainerExe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>addOneSecond</RootNamespace>
-    <AssemblyName>addOneSecond</AssemblyName>
+    <RootNamespace>OneSentenceTile</RootNamespace>
+    <AssemblyName>OneSentenceTile</AssemblyName>
     <DefaultLanguage>zh-CN</DefaultLanguage>
     <TargetPlatformIdentifier>UAP</TargetPlatformIdentifier>
     <TargetPlatformVersion Condition=" '$(TargetPlatformVersion)' == '' ">10.0.19041.0</TargetPlatformVersion>
@@ -17,7 +17,7 @@
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{A5A43C5B-DE2A-4C0C-9213-0A381AF9435A};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
     <WindowsXamlEnableOverview>true</WindowsXamlEnableOverview>
-    <PackageCertificateKeyFile>addOneSecond_TemporaryKey.pfx</PackageCertificateKeyFile>
+    <PackageCertificateKeyFile>OneSentenceTile_TemporaryKey.pfx</PackageCertificateKeyFile>
     <AppxAutoIncrementPackageRevision>False</AppxAutoIncrementPackageRevision>
     <AppxBundle>Always</AppxBundle>
     <AppxBundlePlatforms>x86|x64|arm</AppxBundlePlatforms>
@@ -171,7 +171,7 @@
     <Content Include="Assets\Wide310x150Logo.scale-125.png" />
     <Content Include="Assets\Wide310x150Logo.scale-150.png" />
     <Content Include="Assets\Wide310x150Logo.scale-400.png" />
-    <None Include="addOneSecond_TemporaryKey.pfx" />
+    <None Include="OneSentenceTile_TemporaryKey.pfx" />
     <None Include="Package.StoreAssociation.xml" />
     <Content Include="VoiceCommandDictionary.xml" />
     <Content Include="Properties\Default.rd.xml" />

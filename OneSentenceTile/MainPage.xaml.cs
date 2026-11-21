@@ -25,7 +25,7 @@ using Windows.ApplicationModel.Core;
 
 // https://go.microsoft.com/fwlink/?LinkId=402352&clcid=0x804 上介绍了“空白页”项模板
 
-namespace addOneSecond
+namespace OneSentenceTile
 {
     /// <summary>
     /// 可用于自身或导航至 Frame 内部的空白页。

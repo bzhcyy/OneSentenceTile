@@ -3,23 +3,23 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Windows.Storage;
 
-namespace addOneSecond
+namespace OneSentenceTile
 {
     /// <summary>
     /// 磁贴内容来源：Worker 和 Pages 两个，按用户设置决定优先用哪个，
     /// 优先的那个连不上就自动换另一个。
     ///
-    /// Worker：https://add-one-second.addonesecond.workers.dev/tile.xml
+    /// Worker：https://onesentencetile.onesentencetile.workers.dev/tile.xml
     ///         每次请求现取「每日一言」，同一小时固定一条；支持 ?type=x 选分类。
-    /// Pages ：https://bzhcyy.github.io/add-one-second-UWP/tile.xml
+    /// Pages ：https://bzhcyy.github.io/OneSentenceTile/tile.xml
     ///         每小时生成一次，github.io 国内基本可直连（不支持分类，永远随机）。
     ///
     /// 判定方式：真实 GET 一次，4 秒超时，内容里出现 &lt;tile 才算可用。
     /// </summary>
     static class TileSource
     {
-        public const string Worker = "https://add-one-second.addonesecond.workers.dev/tile.xml";
-        public const string Pages = "https://bzhcyy.github.io/add-one-second-UWP/tile.xml";
+        public const string Worker = "https://onesentencetile.onesentencetile.workers.dev/tile.xml";
+        public const string Pages = "https://bzhcyy.github.io/OneSentenceTile/tile.xml";
 
         private static string _picked;
 

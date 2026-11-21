@@ -1,15 +1,15 @@
 ﻿# 设置磁贴服务器地址（Worker + Pages 两个）
 #
 # 用法（在仓库根目录）：
-#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -WorkerUrl https://add-one-second.addonesecond.workers.dev
-#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/add-one-second-UWP
+#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -WorkerUrl https://onesentencetile.onesentencetile.workers.dev
+#   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -PagesUrl  https://bzhcyy.github.io/OneSentenceTile
 #   powershell -ExecutionPolicy Bypass -File .\set-tile-url.ps1 -WorkerUrl https://a.workers.dev -PagesUrl https://b.github.io/x
 #
 # 只写其中一个也行，另一个保持原值。地址可以带 /tile.xml，也可以只写根，脚本会自动补。
 #
 # 它改三处：
-#   1. addOneSecond/TileSource.cs 的 Worker / Pages 常量（App 运行时优先 Worker，连不上退 Pages）
-#   2. addOneSecond/Package.appxmanifest 的 UriTemplate（App 没运行时用的默认地址，写 Pages）
+#   1. OneSentenceTile/TileSource.cs 的 Worker / Pages 常量（App 运行时优先 Worker，连不上退 Pages）
+#   2. OneSentenceTile/Package.appxmanifest 的 UriTemplate（App 没运行时用的默认地址，写 Pages）
 #   3. tile/config.json 的 baseUrl（Pages 生成器用）
 #
 # 加 -Verify 会依次真的 GET 两个地址，看谁返回 <tile。
@@ -51,8 +51,8 @@ if (-not $WorkerUrl -and -not $PagesUrl) {
     throw '至少给一个：-WorkerUrl 或 -PagesUrl（例：-WorkerUrl https://xxx.workers.dev）'
 }
 
-$tileSource = Join-Path $RepoRoot 'addOneSecond\TileSource.cs'
-$manifest = Join-Path $RepoRoot 'addOneSecond\Package.appxmanifest'
+$tileSource = Join-Path $RepoRoot 'OneSentenceTile\TileSource.cs'
+$manifest = Join-Path $RepoRoot 'OneSentenceTile\Package.appxmanifest'
 $config = Join-Path $RepoRoot 'tile\config.json'
 foreach ($f in @($tileSource, $manifest)) {
     if (-not (Test-Path $f)) { throw "找不到文件：$f（请在仓库根目录运行，或用 -RepoRoot 指定）" }

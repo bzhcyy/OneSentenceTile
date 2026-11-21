@@ -75,7 +75,7 @@ jobs:
         run: |
           set -euo pipefail
           base="${{ steps.base.outputs.base }}"
-          manifest="addOneSecond/Package.appxmanifest"
+          manifest="OneSentenceTile/Package.appxmanifest"
           if [ ! -f "$manifest" ]; then
             echo "::warning::没找到 $manifest，跳过一致性检查"
             exit 0

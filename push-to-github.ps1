@@ -4,7 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token ghp_xxxxxxxx
 #
 # 可选参数：
-#   -Repo    bzhcyy/add-one-second-UWP      仓库（默认这个）
+#   -Repo    bzhcyy/OneSentenceTile      仓库（默认这个）
 #   -Branch  master                         分支
 #   -Path    <脚本所在目录>                  要上传的本地目录
 #   -Message "更新磁贴"                      提交说明
@@ -27,7 +27,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Token,
 
-    [string]$Repo = 'bzhcyy/add-one-second-UWP',
+    [string]$Repo = 'bzhcyy/OneSentenceTile',
     [string]$Branch = 'master',
     [string]$Path = $(if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }),
     [string]$Message = '更新磁贴内容（每日一言）',
@@ -130,7 +130,7 @@ function Invoke-GitHub {
 GitHub 拒绝了这次请求（403）。最常见原因：
   1. 改动了 .github/workflows/ 下的文件，但 Token 没有 Workflows 权限
      -> Token 设置里加 Repository permissions -> Workflows: Read and write；
-  2. Token 的 Repository access 没勾上 bzhcyy/add-one-second-UWP；
+  2. Token 的 Repository access 没勾上 bzhcyy/OneSentenceTile；
   3. Contents 不是 Read and write。
 接口：$Method $Uri
 原始返回：$msg

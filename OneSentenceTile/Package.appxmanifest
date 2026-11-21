@@ -14,10 +14,10 @@
     <Resource Language="x-generate" />
   </Resources>
   <Applications>
-    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="addOneSecond.App">
+    <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="OneSentenceTile.App">
       <uap:VisualElements DisplayName="一言 Tile" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="一言 Tile：桌面磁贴显示一言（hitokoto）" BackgroundColor="transparent">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" Square71x71Logo="Assets\Square71x71Logo.png">
-          <uap:TileUpdate Recurrence="halfHour" UriTemplate="https://bzhcyy.github.io/add-one-second-UWP/tile.xml" />
+          <uap:TileUpdate Recurrence="halfHour" UriTemplate="https://bzhcyy.github.io/OneSentenceTile/tile.xml" />
           <!-- 去掉 ShowNameOnTiles：磁贴底部不再显示 “+1s”，把空间留给语录；标题由磁贴 XML 的 branding 控制 -->
         </uap:DefaultTile>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />

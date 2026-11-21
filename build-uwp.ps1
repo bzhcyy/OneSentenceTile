@@ -37,15 +37,15 @@ param(
 
     [string]$TargetPlatformVersion,
     [string]$CertificatePath,
-    [string]$CertificatePassword = 'addOneSecond'
+    [string]$CertificatePassword = 'OneSentenceTile'
 )
 
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 if (-not $root) { $root = (Get-Location).Path }
 
-$sln = Join-Path $root 'addOneSecond.sln'
-$manifest = Join-Path $root 'addOneSecond\Package.appxmanifest'
+$sln = Join-Path $root 'OneSentenceTile.sln'
+$manifest = Join-Path $root 'OneSentenceTile\Package.appxmanifest'
 $logDir = Join-Path $root 'build'
 $log = Join-Path $logDir 'msbuild.log'
 
@@ -102,8 +102,8 @@ if ($includeMobile -and -not $mobileFound) { Write-Warning '强制引用 Windows
 Step '准备签名证书'
 $certDir = Join-Path $logDir 'cert'
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
-$pfx = Join-Path $certDir 'addOneSecond.pfx'
-$cer = Join-Path $certDir 'addOneSecond.cer'
+$pfx = Join-Path $certDir 'OneSentenceTile.pfx'
+$cer = Join-Path $certDir 'OneSentenceTile.cer'
 
 # 清单里的 Subject（改过 Publisher 就得换证书，否则签名报 APPX0108）
 $publisher = [regex]::Match((Get-Content $manifest -Raw), 'Publisher="([^"]+)"').Groups[1].Value
@@ -133,7 +133,7 @@ if (-not (Test-Path $pfx)) {
     Write-Host "生成自签证书，Subject=$publisher"
     $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
     $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
-        -FriendlyName 'addOneSecond dev' -CertStoreLocation 'Cert:\CurrentUser\My' `
+        -FriendlyName 'OneSentenceTile dev' -CertStoreLocation 'Cert:\CurrentUser\My' `
         -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') -NotAfter (Get-Date).AddYears(5)
     Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
     Export-Certificate -Cert $cert -FilePath $cer | Out-Null
@@ -142,7 +142,7 @@ if (-not (Test-Path $pfx)) {
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
-$appxDir = Join-Path $root 'addOneSecond\AppPackages\'
+$appxDir = Join-Path $root 'OneSentenceTile\AppPackages\'
 # MSBuild 命令行里的路径统一用正斜杠：反斜杠结尾会转义掉收尾引号，导致 /p 参数解析错乱
 $appxDirArg = ($appxDir -replace '\\', '/')
 $pfxArg = ($pfx -replace '\\', '/')
@@ -215,7 +215,7 @@ else {
 
 if ($Register) {
     Step '注册到本机（开发者模式）'
-    $appxManifest = @(Get-ChildItem (Join-Path $root "addOneSecond\bin\$Platform\$Configuration") -Recurse -Filter 'AppxManifest.xml' -ErrorAction SilentlyContinue |
+    $appxManifest = @(Get-ChildItem (Join-Path $root "OneSentenceTile\bin\$Platform\$Configuration") -Recurse -Filter 'AppxManifest.xml' -ErrorAction SilentlyContinue |
         Select-Object -First 1)
     if (-not $appxManifest) { throw '找不到编译输出的 AppxManifest.xml，无法注册。' }
     Add-AppxPackage -Register $appxManifest.FullName

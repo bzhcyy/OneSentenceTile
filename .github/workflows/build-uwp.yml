@@ -6,8 +6,8 @@
 #   3. 跑完下载 artifact uwp-package，解压后右键 Add-AppDevPackage.ps1 → 使用 PowerShell 运行
 #
 # 产物说明：
-#   AppPackages/addOneSecond_<版本>_Test/addOneSecond_<版本>_x64.appxbundle   ← 这就是可安装的 UWP 包
-#   同目录还有 addOneSecond_<版本>_x64.cer 和 Add-AppDevPackage.ps1（后者会自动装证书再装包）
+#   AppPackages/OneSentenceTile_<版本>_Test/OneSentenceTile_<版本>_x64.appxbundle   ← 这就是可安装的 UWP 包
+#   同目录还有 OneSentenceTile_<版本>_x64.cer 和 Add-AppDevPackage.ps1（后者会自动装证书再装包）
 #   注意扩展名是 .appxbundle 而不是 .msixbundle：SDK 19041 的 makeappx 输出的是 .appx/.appxbundle，
 #   两者安装方式完全一样。
 #
@@ -34,7 +34,7 @@ on:
   push:
     branches: [master, main]
     paths:
-      - 'addOneSecond/**'
+      - 'OneSentenceTile/**'
       - 'build-uwp.ps1'
       - '.github/workflows/build-uwp.yml'
 
@@ -100,7 +100,7 @@ jobs:
         shell: pwsh
         run: |
           $exts = @('.appxbundle', '.msixbundle', '.appx', '.msix', '.msixupload', '.appxupload')
-          $pkgs = @(Get-ChildItem addOneSecond/AppPackages -Recurse -File -ErrorAction SilentlyContinue |
+          $pkgs = @(Get-ChildItem OneSentenceTile/AppPackages -Recurse -File -ErrorAction SilentlyContinue |
             Where-Object { $exts -contains $_.Extension })
           if ($pkgs.Count -eq 0) {
             throw "没有生成任何安装包（检查上面的编译日志和 build/msbuild.log）"
@@ -124,7 +124,7 @@ jobs:
           name: uwp-package
           # 整个 AppPackages 一起传：Add-AppDevPackage.ps1 要求 .appxbundle 和 .cer 在同一个目录里
           path: |
-            addOneSecond/AppPackages/**
+            OneSentenceTile/AppPackages/**
             build/cert/*.cer
             build/msbuild.log
           if-no-files-found: error
