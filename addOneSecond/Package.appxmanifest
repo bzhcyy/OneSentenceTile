@@ -1,10 +1,10 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
-  <Identity Name="800948F61A16.1s" Publisher="CN=chenx" Version="1.1.36.0" />
+  <Identity Name="KienSticn.OneSentenceTile" Publisher="CN=KienSticn" Version="1.2.0.0" />
   <mp:PhoneIdentity PhoneProductId="a566d2ec-3a82-45ec-83ad-771a03c8e7dc" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
   <Properties>
-    <DisplayName>+1s</DisplayName>
-    <PublisherDisplayName>晨旭</PublisherDisplayName>
+    <DisplayName>一言 Tile</DisplayName>
+    <PublisherDisplayName>KienSticn</PublisherDisplayName>
     <Logo>Assets\StoreLogo.scale.png</Logo>
   </Properties>
   <Dependencies>
@@ -15,7 +15,7 @@
   </Resources>
   <Applications>
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="addOneSecond.App">
-      <uap:VisualElements DisplayName="+1s" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="This is a cilent for time donation project." BackgroundColor="transparent">
+      <uap:VisualElements DisplayName="一言 Tile" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="一言 Tile：桌面磁贴显示一言（hitokoto）" BackgroundColor="transparent">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" Square71x71Logo="Assets\Square71x71Logo.png">
           <uap:TileUpdate Recurrence="halfHour" UriTemplate="https://bzhcyy.github.io/add-one-second-UWP/tile.xml" />
           <!-- 去掉 ShowNameOnTiles：磁贴底部不再显示 “+1s”，把空间留给语录；标题由磁贴 XML 的 branding 控制 -->

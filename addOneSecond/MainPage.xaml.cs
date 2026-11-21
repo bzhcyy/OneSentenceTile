@@ -68,6 +68,7 @@ namespace addOneSecond
             _loading = true;
             isWorkerFirst.IsOn = TileSource.PreferWorker;
             SelectIntervalInCombo();
+            SelectTypeInCombo();
             _loading = false;
 
             await LoadDailyQuote();
@@ -371,6 +372,33 @@ namespace addOneSecond
             {
                 var ignored = RestartTileUpdate();
             }
+        }
+
+        private void SelectTypeInCombo()
+        {
+            var tag = TileSource.HitokotoType;
+            foreach (ComboBoxItem item in hitokotoTypeCombo.Items)
+            {
+                if (((string)item.Tag) == tag)
+                {
+                    hitokotoTypeCombo.SelectedItem = item;
+                    return;
+                }
+            }
+            hitokotoTypeCombo.SelectedIndex = 0;
+        }
+
+        private async void hitokotoTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = hitokotoTypeCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.HitokotoType = (string)item.Tag;
+            if (_loading) return;
+            if (isTileFresh.IsOn)
+            {
+                await RestartTileUpdate();
+            }
+            await LoadDailyQuote();
         }
 
         private async void isWorkerFirst_Toggled(object sender, RoutedEventArgs e)

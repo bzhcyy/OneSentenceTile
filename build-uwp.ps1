@@ -105,18 +105,31 @@ if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | O
 $pfx = Join-Path $certDir 'addOneSecond.pfx'
 $cer = Join-Path $certDir 'addOneSecond.cer'
 
+# 清单里的 Subject（改过 Publisher 就得换证书，否则签名报 APPX0108）
+$publisher = [regex]::Match((Get-Content $manifest -Raw), 'Publisher="([^"]+)"').Groups[1].Value
+if (-not $publisher) { throw '清单里没读到 Publisher' }
+
 if ($CertificatePath) {
     if (-not (Test-Path $CertificatePath)) { throw "指定的证书不存在：$CertificatePath" }
     $pfx = (Resolve-Path $CertificatePath).Path
     Write-Host "使用指定证书: $pfx"
 }
 elseif (Test-Path $pfx) {
-    Write-Host "复用已有证书: $pfx"
+    # 旧证书的 Subject 可能和清单对不上（比如 Publisher 改过），对不上就重签
+    $subjectOk = $false
+    try {
+        $existing = Get-PfxCertificate -FilePath $pfx
+        $subjectOk = ($existing.Subject -eq $publisher)
+        Write-Host ("已有证书 Subject=" + $existing.Subject + "（清单要求 " + $publisher + "）")
+    }
+    catch { Write-Warning "读取已有证书失败，将重新生成" }
+    if (-not $subjectOk) {
+        Write-Warning "证书与清单 Publisher 不一致，删掉重建"
+        Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+        Remove-Item $cer -Force -ErrorAction SilentlyContinue
+    }
 }
-else {
-    if (-not (Test-Path $manifest)) { throw "找不到 $manifest，无法读取 Publisher" }
-    $publisher = [regex]::Match((Get-Content $manifest -Raw), 'Publisher="([^"]+)"').Groups[1].Value
-    if (-not $publisher) { throw '清单里没读到 Publisher' }
+if (-not (Test-Path $pfx)) {
     Write-Host "生成自签证书，Subject=$publisher"
     $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
     $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `

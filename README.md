@@ -1,4 +1,4 @@
-# +1s 磁贴服务器（Worker + Pages 双份）
+# 一言 Tile — 磁贴服务器（Worker + Pages 双份）
 
 两个服务器同时在线，内容格式完全一致，随时可以换：
 
@@ -57,6 +57,21 @@ Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你�
 
 ## 界面（本轮改版）
 
+应用标识（本轮已改）：
+
+| 项 | 值 |
+|---|---|
+| Identity Name | `KienSticn.OneSentenceTile` |
+| Publisher | `CN=KienSticn` |
+| DisplayName | 一言 Tile |
+| PublisherDisplayName | KienSticn |
+| Version | 1.2.0.0 |
+
+> ⚠️ **Identity / Publisher 一改，这就是一个新 App**：装之前先把旧版（`800948F61A16.1s` / `CN=chenx`）
+> 卸载掉，否则会变成两个应用并存、或者报 0x80073CF3 发布者不匹配。
+> 签名证书也换成 `CN=KienSticn`：CI 的证书缓存 key 已改成 `uwp-dev-cert-v2`，
+> 本地 `build/cert` 里的旧证书会被 `build-uwp.ps1` 自动识别并重签。
+
 主界面：
 
 - 顶部中间固定 **每日一言**，下面大字显示磁贴当前那条语录（`FontSize=34`、自动换行、居中），
@@ -72,6 +87,7 @@ Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你�
 | 动态磁贴 | 开关文案去掉「半小时一刷新」 |
 | **磁贴刷新间隔**（新） | 30 分钟 / 1 小时 / 6 小时 / 12 小时 / 24 小时 |
 | **磁贴源：Worker / Pages 优先**（新） | 存进 RoamingSettings，App 启动时按优先级探测 |
+| **一言分类**（新） | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 来自网络 / 其他 / 影视 / 诗词 / 哲学 / 抖机灵 |
 | 屏幕常亮 | 不变 |
 | 背景/字体颜色 | 不变 |
 | 本项目地址（新） | `https://github.com/bzhcyy/add-one-second-UWP` |
@@ -80,6 +96,15 @@ Cloudflare Registrar 只是按成本价卖域名，**没有免费域名**（你�
 
 > 刷新间隔只能选上表这 5 档——这是 Windows `PeriodicUpdateRecurrence` 枚举的固定值，
 > 系统不让磁贴按任意分钟数轮询。
+>
+> **分类怎么生效**：
+> - Worker：拼成 `?type=d` → Worker 转成 `?c=d` 请求 hitokoto，缓存键也带分类；
+> - Pages：生成器对每个分类各生成一个文件（`tile.xml` + `tile-a.xml` … `tile-l.xml` 共 13 个），
+>   App 连 Pages 时按分类换文件名，所以兜底路径下分类**同样有效**。
+>
+> 「网易云(j)」官方已于 2022-11-18 停用该插件，选中后接口大概率失败，
+> 此时会退回仓库内置的语录（磁贴不会空，但内容不是网易云）。
+> 分类码参考 <https://developer.hitokoto.cn/sentence/>。
 
 # 附：GitHub Pages 方案（已停用，留作参考）
 
@@ -246,8 +271,8 @@ python tile\gen_tile.py --out _site --base-url https://yourname.github.io/your-r
 2. 在解压出来的目录里跑（先 DryRun 看一眼清单）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token ghp_你的token -DryRun
-powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token ghp_你的token
+powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token github_pat_你的token -DryRun
+powershell -ExecutionPolicy Bypass -File .\push-to-github.ps1 -Token github_pat_你的token
 ```
 
 可选参数：`-Repo bzhcyy/add-one-second-UWP`、`-Branch master`、`-Message "..."`、

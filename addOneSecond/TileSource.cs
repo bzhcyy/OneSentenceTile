@@ -10,9 +10,9 @@ namespace addOneSecond
     /// 优先的那个连不上就自动换另一个。
     ///
     /// Worker：https://add-one-second.addonesecond.workers.dev/tile.xml
-    ///         每次请求现取「每日一言」，同一小时固定一条；国内可能被 DNS 污染。
+    ///         每次请求现取「每日一言」，同一小时固定一条；支持 ?type=x 选分类。
     /// Pages ：https://bzhcyy.github.io/add-one-second-UWP/tile.xml
-    ///         每小时生成一次，github.io 国内基本可直连。
+    ///         每小时生成一次，github.io 国内基本可直连（不支持分类，永远随机）。
     ///
     /// 判定方式：真实 GET 一次，4 秒超时，内容里出现 &lt;tile 才算可用。
     /// </summary>
@@ -31,10 +31,39 @@ namespace addOneSecond
                 var v = ApplicationData.Current.RoamingSettings.Values["preferWorker"];
                 return v == null ? true : (bool)v;
             }
-            set
+            set { ApplicationData.Current.RoamingSettings.Values["preferWorker"] = value; }
+        }
+
+        /// <summary>
+        /// 一言分类：空 = 随机，否则是 a~l 里的一个字母
+        /// （a 动画 b 漫画 c 游戏 d 文学 e 原创 f 来自网络 g 其他 h 影视 i 诗词 k 哲学 l 抖机灵）。
+        /// </summary>
+        public static string HitokotoType
+        {
+            get
             {
-                ApplicationData.Current.RoamingSettings.Values["preferWorker"] = value;
+                var v = ApplicationData.Current.RoamingSettings.Values["hitokotoType"];
+                return (v as string) ?? "";
             }
+            set { ApplicationData.Current.RoamingSettings.Values["hitokotoType"] = value ?? ""; }
+        }
+
+        /// <summary>
+        /// Worker 用 ?type=x；Pages 是静态托管，每个分类一个文件，换成 tile-x.xml。
+        /// 随机（分类为空）时原样返回。
+        /// </summary>
+        public static string WithType(string url)
+        {
+            var t = HitokotoType;
+            if (string.IsNullOrEmpty(t)) return url;
+
+            if (url.StartsWith(Pages, StringComparison.OrdinalIgnoreCase))
+            {
+                // https://xxx/tile.xml -> https://xxx/tile-d.xml
+                return url.Substring(0, url.Length - "tile.xml".Length) + "tile-" + t + ".xml";
+            }
+
+            return url + (url.Contains("?") ? "&" : "?") + "type=" + Uri.EscapeDataString(t);
         }
 
         /// <summary>按设置的优先级挑一个能用的地址；两个都不通时返回优先的那个。</summary>
@@ -44,11 +73,11 @@ namespace addOneSecond
             string first = preferWorker ? Worker : Pages;
             string second = preferWorker ? Pages : Worker;
 
-            if (await ProbeAsync(first))
+            if (await ProbeAsync(WithType(first)))
             {
                 _picked = first;
             }
-            else if (await ProbeAsync(second))
+            else if (await ProbeAsync(WithType(second)))
             {
                 _picked = second;
             }
@@ -56,13 +85,13 @@ namespace addOneSecond
             {
                 _picked = first;
             }
-            return new Uri(_picked);
+            return new Uri(WithType(_picked));
         }
 
         /// <summary>当前选中的地址（没解析过就是 null），便于日志/界面显示。</summary>
         public static string PickedUrl
         {
-            get { return _picked; }
+            get { return _picked == null ? null : WithType(_picked); }
         }
 
         private static async Task<bool> ProbeAsync(string url)

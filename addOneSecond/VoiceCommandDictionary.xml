@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <VoiceCommands xmlns="http://schemas.microsoft.com/voicecommands/1.2">
   <CommandSet xml:lang="zh-cn" Name="AdventureWorksCommandSet_zh-cn">
-    <AppName> 续 </AppName>
+    <AppName> 一言 </AppName>
     <Example> 一秒 </Example>
 
     <Command Name="addOneSecond">

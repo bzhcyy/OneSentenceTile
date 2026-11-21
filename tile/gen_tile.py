@@ -48,6 +48,8 @@ DEFAULTS = {
     # 语录来源：hitokoto = 一言接口（随机）；local = 仓库里的 quotes.json
     "source": "hitokoto",
     "hitokotoUrl": "https://v1.hitokoto.cn/",
+    # 要生成哪些分类的文件："" = 随机（tile.xml），其余生成 tile-<c>.xml
+    "types": ["", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
     "quotePrefix": "每日一言：",     # 语录前缀
     "showAttribution": True,        # 正文后面是否带「 —— 作者《出处》」
     "attributionSep": " —— ",       # 正文与出处之间的分隔（空格 + 破折号）
@@ -411,91 +413,94 @@ def main():
 
     now = datetime.datetime.now(datetime.timezone.utc)
     birthday = (now.month == 8 and now.day == 17)
-
     source = (cfg.get("source") or "local").lower()
-    hitokoto = None
-    warn = None
-    if source == "hitokoto" and not birthday:
-        hitokoto, warn = fetch_hitokoto(cfg.get("hitokotoUrl") or "https://v1.hitokoto.cn/")
-        if warn:
-            print(f"warn: 一言接口失败（{warn}），退回仓库里的 quotes.json", file=sys.stderr)
 
-    if hitokoto:
-        poem, quote_index, origin = hitokoto["text"], -1, "hitokoto"
-        quote_meta = {"from": hitokoto["from"], "from_who": hitokoto["from_who"],
-                      "type": hitokoto["type"]}
-    elif birthday:
-        poem, quote_index, origin, quote_meta = BIRTHDAY_POEM, -1, "birthday", {}
-    else:
-        quote_index = args.quote_index if args.quote_index is not None else random.randrange(len(quotes))
-        poem, origin, quote_meta = quotes[quote_index], "local", {}
+    def fetch_one(tcode):
+        """按分类取一条；取不到就退回本地 quotes.json。"""
+        if source == "hitokoto" and not birthday:
+            url = cfg.get("hitokotoUrl") or "https://v1.hitokoto.cn/"
+            if tcode:
+                url += ("&" if "?" in url else "?") + "c=" + tcode
+            item, warn = fetch_hitokoto(url)
+            if item:
+                return {"text": item["text"],
+                        "meta": {"from": item["from"], "from_who": item["from_who"], "type": item["type"]},
+                        "origin": "hitokoto"}
+            print(f"warn: 分类 {tcode or '随机'} 取一言失败（{warn}），退回本地语录", file=sys.stderr)
+        if birthday:
+            return {"text": BIRTHDAY_POEM, "meta": {}, "origin": "birthday"}
+        idx = args.quote_index if args.quote_index is not None else random.randrange(len(quotes))
+        return {"text": quotes[idx], "meta": {}, "origin": "local", "index": idx}
 
-
-    attribution = format_attribution(quote_meta, cfg)
-    xml_text = build_xml(base_url, poem, cfg, now, attribution)
-    problems = validate(xml_text, base_url, cfg)
-
-    print(f"baseUrl   : {base_url}")
-    print(f"来源      : {origin}" + (f"（{quote_meta.get('from_who') or ''}《{quote_meta.get('from')}》）"
-                                    if quote_meta else ""))
-    print(f"语录（{len(poem)} 字）: {poem[:40]}…")
-    print(f"载体      : 标题={cfg['showTitle']} / 计数={cfg['showCounter']} / 前缀={cfg['quotePrefix']!r}")
-    print(f"载荷      : {len(xml_text.encode('utf-8'))} 字节（上限 {cfg['maxPayloadBytes']}，系统硬限 5KB）")
-    if problems:
-        print("自检失败:")
-        for p in problems:
-            print("  -", p)
-        return 1
-    print("自检通过：4 个自适应 binding、图片为深色底图/海报、载荷未超限")
-
-    if args.check:
-        return 0
-
+    types = cfg.get("types") or [""]
     out_dir = pathlib.Path(args.out)
     if not out_dir.is_absolute():
         out_dir = pathlib.Path.cwd() / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     bg_setting = (cfg.get("backgroundImage") or "").strip()
-    bg_bytes = 0
-    if bg_setting == BG_NAME:
-        bg_bytes = write_gradient_png(out_dir / BG_NAME)
-    (out_dir / "tile.xml").write_text(xml_text, encoding="utf-8")
+    if bg_setting == BG_NAME and not args.check:
+        write_gradient_png(out_dir / BG_NAME)
+
+    print(f"baseUrl   : {base_url}")
+    print(f"分类数    : {len(types)}（随机 + {len(types) - 1} 个分类）")
+    all_ok = True
+    default_health = None
+    variants = []
+
+    for tcode in types:
+        item = fetch_one(tcode)
+        poem, meta, origin = item["text"], item["meta"], item["origin"]
+        attribution = format_attribution(meta, cfg)
+        xml_text = build_xml(base_url, poem, cfg, now, attribution)
+        problems = validate(xml_text, base_url, cfg)
+        size = len(xml_text.encode("utf-8"))
+        fname = "tile.xml" if not tcode else f"tile-{tcode}.xml"
+        ok = not problems
+        all_ok = all_ok and ok
+        print(f"  {fname:<12} {origin:<8} {size:>4}B  {poem[:24]}…" + ("" if ok else "  ✗ " + "; ".join(problems)))
+
+        variants.append({"file": fname, "type": tcode or "random", "source": origin,
+                         "quote": poem, "from": meta.get("from", ""), "fromWho": meta.get("from_who", ""),
+                         "bytes": size, "url": f"{base_url}/{fname}"})
+
+        if not args.check:
+            (out_dir / fname).write_text(xml_text, encoding="utf-8")
+
+        if not tcode:
+            default_health = {
+                "ok": ok,
+                "generatedAt": now.isoformat().replace("+00:00", "Z"),
+                "baseUrl": base_url,
+                "tileUrl": f"{base_url}/tile.xml",
+                "background": (f"{base_url}/{bg_setting}" if bg_setting and not bg_setting.startswith("http")
+                               else (bg_setting or None)),
+                "payloadBytes": size,
+                "title": cfg.get("title", ""),
+                "counter": counter_line(cfg, now) if cfg.get("showCounter") else None,
+                "counterMode": (cfg.get("counterMode") or "counter"),
+                "stats": stats_for(now)["total"],
+                "quote": poem,
+                "source": origin,
+                "quoteMeta": meta,
+                "variants": [],
+            }
+
+    if not all_ok:
+        print("自检失败：上面标 ✗ 的那几行")
+        return 1
+    print(f"自检通过：{len(types)} 个文件，均为 4 个自适应 binding、载荷未超限")
+
+    if args.check:
+        return 0
+
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
-
-    health = {
-        "ok": True,
-        "generatedAt": now.isoformat().replace("+00:00", "Z"),
-        "baseUrl": base_url,
-        "tileUrl": f"{base_url}/tile.xml",
-        "background": (f"{base_url}/{bg_setting}" if bg_setting and not bg_setting.startswith("http")
-                       else (bg_setting or None)),
-        "quoteIndex": quote_index,
-        "birthday": birthday,
-        "payloadBytes": len(xml_text.encode("utf-8")),
-        "title": cfg.get("title", ""),
-        "counter": counter_line(cfg, now) if cfg.get("showCounter") else None,
-        "counterMode": (cfg.get("counterMode") or "counter"),
-        "stats": stats_for(now)["total"],
-        "quote": poem,
-        "source": origin,
-        "quoteMeta": quote_meta,
-        "config": {k: cfg.get(k) for k in ("showTitle", "showCounter", "counterLabel",
-                                           "quotePrefix",
-                                           "backgroundImage", "branding")},
-    }
-    (out_dir / "health.json").write_text(json.dumps(health, ensure_ascii=False, indent=2) + "\n",
-                                         encoding="utf-8")
-    (out_dir / "index.html").write_text(build_index(health), encoding="utf-8")
-
-    print(f"已写入    : {out_dir / 'tile.xml'}")
-    if bg_bytes:
-        print(f"已写入    : {out_dir / BG_NAME}（{bg_bytes} 字节，深色底图）")
-    elif bg_setting:
-        print(f"背景      : {bg_setting}（外部图片，未生成）")
-    else:
-        print("背景      : 透明（透出壁纸 + 系统磨砂）")
-    print(f"已写入    : {out_dir / 'health.json'}、{out_dir / 'index.html'}")
+    if default_health is not None:
+        default_health["variants"] = variants
+        (out_dir / "health.json").write_text(
+            json.dumps(default_health, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        (out_dir / "index.html").write_text(build_index(default_health), encoding="utf-8")
+    print(f"已写入    : {out_dir}（tile.xml + {len(types) - 1} 个分类文件）")
     return 0
 
 
