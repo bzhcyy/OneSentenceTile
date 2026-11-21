@@ -1,3 +1,25 @@
+# +1s 磁贴服务器
+
+## 现在用的是 Cloudflare Worker（不再依赖 GitHub Pages）
+
+磁贴地址：`https://add-one-second.addonesecond.workers.dev/tile.xml`
+Worker 源码：`worker.js`（我这边单独给的文件，未放进仓库）
+
+- 每次请求现取一条「每日一言」（`https://v1.hitokoto.cn/` 随机类型），接口挂了回落到内置语录
+- 免费额度 10 万请求/天，磁贴每 30 分钟拉一次 ≈ 48 次/天
+- **不需要 Pages、不需要 Actions 定时任务、不需要提交代码**
+
+App 里的地址已经改好（`Package.appxmanifest` 与 `MainPage.xaml.cs` 都指向 `/tile.xml`），
+推上去跑一次 **Build UWP package** 装新包即可。
+
+> `workers.dev` 子域在国内常被 DNS 污染。磁贴不刷新时先确认能打开
+> `https://add-one-second.addonesecond.workers.dev/health`；打不开就在 Worker 里绑自定义域名
+> （Settings → Domains & Routes → Custom domain），再用 `set-tile-url.ps1 -BaseUrl https://你的域名` 换地址。
+
+---
+
+# 附：GitHub Pages 方案（已停用，留作参考）
+
 # 用 GitHub Pages 当磁贴服务器（替代已失效的 Cloudflare Worker）
 
 原来的磁贴地址 `https://add-one-second.papapoi.workers.dev/` 已经返回 `404 error code: 1042`，
