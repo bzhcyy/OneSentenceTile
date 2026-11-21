@@ -1,0 +1,139 @@
+# 把磁贴 XML 发布到 GitHub Pages
+#
+# 每 30 分钟（以及每次 push / 手动触发）重新生成 tile.xml 并部署，
+# 磁贴地址形如：https://<owner>.github.io/<repo>/tile.xml
+#               https://<owner>.github.io/<repo>/pic/31.png
+#
+# 前提（只做一次）：
+#   1. 仓库是 public（免费账号的 Pages 只对公开仓库开放）
+#   2. Settings → Pages → Build and deployment → Source 选「GitHub Actions」
+#   3. 可选：Settings → Secrets and variables → Actions → Variables 新建 TILE_BASE_URL，
+#      填你的 Pages 根地址（仓库名带大写/自定义域名时建议填，否则自动按 owner.github.io/repo 推算）
+#
+# 注意：GitHub 的 schedule 是「尽力而为」，高峰期可能延迟十几分钟；免费仓库连续 60 天无提交
+# 会停掉定时任务（手动 Run workflow 或随便 push 一次即可恢复）。
+
+name: Publish live tile to GitHub Pages
+
+on:
+  schedule:
+    # 每小时整点跑一次：磁贴内容（每日一言）每小时换一条。
+    # Windows 每 30 分钟来拉一次，所以最长约 1.5 小时才会看到新的一条，属正常。
+    - cron: '0 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [master, main]
+    paths:
+      - 'tile/**'
+      - '.github/workflows/tile-pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只保留一个 Pages 部署在跑，避免并发互相覆盖
+concurrency:
+  group: tile-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.base.outputs.base }}
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 准备 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 解析磁贴根地址
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ vars.TILE_BASE_URL }}"
+          if [ -z "$base" ]; then
+            owner="${GITHUB_REPOSITORY%%/*}"
+            owner="$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')"
+            repo="${GITHUB_REPOSITORY#*/}"
+            base="https://${owner}.github.io/${repo}"
+          fi
+          base="${base%/}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "磁贴地址：$base/tile.xml"
+
+      - name: 生成 tile.xml（含结构自检）
+        run: python tile/gen_tile.py --out "$GITHUB_WORKSPACE/_site" --base-url "${{ steps.base.outputs.base }}"
+
+      - name: 提示 App 端地址是否一致
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ steps.base.outputs.base }}"
+          manifest="addOneSecond/Package.appxmanifest"
+          if [ ! -f "$manifest" ]; then
+            echo "::warning::没找到 $manifest，跳过一致性检查"
+            exit 0
+          fi
+          uri=$(grep -o 'UriTemplate="[^"]*"' "$manifest" 2>/dev/null | head -n1 | sed 's/UriTemplate="//; s/"$//' || true)
+          echo "App 清单里的磁贴地址：${uri:-（没找到）}"
+          if [ -z "$uri" ]; then
+            echo "::warning::清单里没找到 UriTemplate，磁贴只能靠 App 内的开关触发"
+          elif [ "$uri" != "$base/tile.xml" ]; then
+            echo "::warning::App 清单里的地址（$uri）与 Pages 地址（$base/tile.xml）不一致。跑 .\\set-tile-url.ps1 -BaseUrl $base 后重新打包，否则装出来的 App 仍会去旧地址拿磁贴。"
+          else
+            echo "OK：App 清单与 Pages 地址一致"
+          fi
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 打包站点
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 部署到 Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: 部署后自检
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${{ needs.build.outputs.base }}"
+          for i in 1 2 3 4 5; do
+            code=$(curl -sS -o /tmp/tile.xml -w '%{http_code}' "$base/tile.xml" || true)
+            if [ "$code" = "200" ] && grep -qi '<tile' /tmp/tile.xml; then break; fi
+            echo "第 $i 次探测：HTTP $code，等 6 秒重试"
+            sleep 6
+          done
+          echo "===== tile.xml ($code) ====="
+          head -c 400 /tmp/tile.xml; echo
+          echo "===== health.json ====="
+          curl -sS "$base/health.json" || true
+          echo
+          if [ "$code" != "200" ]; then
+            echo "::error::部署后 $base/tile.xml 返回 $code"
+            exit 1
+          fi
+          grep -qi '<binding template="TileLarge"' /tmp/tile.xml || { echo "::error::tile.xml 结构不对"; exit 1; }
+          {
+            echo "### 磁贴已发布"
+            echo ""
+            echo "- 磁贴 XML：$base/tile.xml"
+            echo "- 自检信息：$base/health.json"
+            echo "- 图片：$base/pic/1.png"
+          } >> "$GITHUB_STEP_SUMMARY"

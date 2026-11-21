@@ -1,1 +1,130 @@
+# 云端打包 UWP（本机没装 Visual Studio 时的备用方案）
+#
+# 用法：
+#   1. 把仓库推到 GitHub
+#   2. Actions → "Build UWP package" → Run workflow
+#   3. 跑完下载 artifact uwp-package，解压后右键 Add-AppDevPackage.ps1 → 使用 PowerShell 运行
+#
+# 产物说明：
+#   AppPackages/addOneSecond_<版本>_Test/addOneSecond_<版本>_x64.appxbundle   ← 这就是可安装的 UWP 包
+#   同目录还有 addOneSecond_<版本>_x64.cer 和 Add-AppDevPackage.ps1（后者会自动装证书再装包）
+#   注意扩展名是 .appxbundle 而不是 .msixbundle：SDK 19041 的 makeappx 输出的是 .appx/.appxbundle，
+#   两者安装方式完全一样。
+#
+# 为什么默认用 windows-2022：
+#   windows-latest 现在可能指向 VS18(2026) 镜像，那上面未必还带 UWP 工作负载和 10.0.19041 SDK；
+#   windows-2022 是已知带 VS2022 + UWP 工作负载 + SDK 19041 的镜像，打包最稳。
+#   想试新镜像：Run workflow 时把 runner 选成 windows-latest（脚本会自动适配 SDK 版本）。
+#
+# 依赖：仓库根目录必须存在 build-uwp.ps1（打包脚本）。本工作流开头的“前置检查”会先确认它在。
 
+name: Build UWP package
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Runner 镜像（打包失败时可换 windows-latest 试）'
+        required: false
+        default: 'windows-2022'
+        type: choice
+        options:
+          - windows-2022
+          - windows-latest
+  push:
+    branches: [master, main]
+    paths:
+      - 'addOneSecond/**'
+      - 'build-uwp.ps1'
+      - '.github/workflows/build-uwp.yml'
+
+jobs:
+  build:
+    runs-on: ${{ github.event.inputs.runner || 'windows-2022' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # 仓库里必须带打包脚本，缺了就早点报错，别等到编译阶段才莫名其妙失败
+      - name: 前置检查（build-uwp.ps1）
+        shell: pwsh
+        run: |
+          if (-not (Test-Path .\build-uwp.ps1)) {
+            Write-Host "::error::仓库根目录缺少 build-uwp.ps1。"
+            throw "缺少 build-uwp.ps1：请把打包脚本补进仓库根目录（或改用 Visual Studio 本地打包）后再运行本工作流。"
+          }
+          Write-Host "build-uwp.ps1 已就位（$((Get-Item .\build-uwp.ps1).Length) 字节）"
+
+      - name: 环境自检（仅供参考，不阻断）
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          if (Test-Path $vswhere) {
+            $vs = & $vswhere -latest -products * -property installationPath
+            Write-Host "Visual Studio: $vs"
+            $uwp = & $vswhere -latest -requires Microsoft.VisualStudio.Workload.Universal -property installationPath
+            if ($uwp) { Write-Host "UWP 工作负载: 已安装" }
+            else { Write-Warning "没检测到 UWP 工作负载，编译可能失败" }
+          }
+          else { Write-Warning "找不到 vswhere" }
+          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Include" -ErrorAction SilentlyContinue |
+            Select-Object -ExpandProperty Name | ForEach-Object { Write-Host "SDK: $_" }
+
+      # 复用同一张自签证书：否则每次构建证书都不同，覆盖安装会报 0x80073CF3（发布者不匹配）。
+      # 不想要缓存私钥就删掉这一步（代价是升级前必须先卸载旧版）。
+      - name: 复用签名证书
+        uses: actions/cache@v4
+        with:
+          path: build/cert
+          key: uwp-dev-cert-v1
+
+      - name: 打包
+        shell: powershell
+        run: .\build-uwp.ps1 -Configuration Release -NoDotNetNative
+
+      # 编译失败时把日志尾部贴到 Summary，省得去下载 artifact
+      - name: 失败时输出编译日志
+        if: failure()
+        shell: pwsh
+        run: |
+          $log = 'build/msbuild.log'
+          if (-not (Test-Path $log)) { Write-Warning "没有 $log"; exit 0 }
+          $tail = @(Get-Content $log -Tail 60)
+          $tail | Write-Host
+          '### msbuild 日志尾部（最后 60 行）' | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          $tail | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          '```' | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: 校验产物并生成安装说明
+        shell: pwsh
+        run: |
+          $exts = @('.appxbundle', '.msixbundle', '.appx', '.msix', '.msixupload', '.appxupload')
+          $pkgs = @(Get-ChildItem addOneSecond/AppPackages -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $exts -contains $_.Extension })
+          if ($pkgs.Count -eq 0) {
+            throw "没有生成任何安装包（检查上面的编译日志和 build/msbuild.log）"
+          }
+          Write-Host "找到 $($pkgs.Count) 个安装包："
+          $lines = @('### 安装包', '')
+          foreach ($p in $pkgs) {
+            $size = [math]::Round($p.Length / 1MB, 2)
+            Write-Host "  $($p.FullName)  ($size MB)"
+            $lines += "- $($p.Name)  ($size MB)"
+          }
+          $lines += ''
+          $lines += '安装：解压 artifact 后，右键 `Add-AppDevPackage.ps1` → 使用 PowerShell 运行（会自动装证书并安装）。'
+          $lines += '首次安装需要管理员权限；装完打开 App，把“动态磁贴”关一次再打开即可看到磁贴文字。'
+          $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
+      - name: 上传安装包与证书
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uwp-package
+          # 整个 AppPackages 一起传：Add-AppDevPackage.ps1 要求 .appxbundle 和 .cer 在同一个目录里
+          path: |
+            addOneSecond/AppPackages/**
+            build/cert/*.cer
+            build/msbuild.log
+          if-no-files-found: error
