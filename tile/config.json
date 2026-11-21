@@ -1,0 +1,21 @@
+{
+  "baseUrl": "https://bzhcyy.github.io/add-one-second-UWP",
+  "title": "每日一言",
+  "showTitle": true,
+  "showCounter": false,
+  "counterMode": "clock",
+  "clockFormat": "%Y年%m月%d日",
+  "utcOffset": 8,
+  "source": "hitokoto",
+  "hitokotoUrl": "https://v1.hitokoto.cn/",
+  "quotePrefix": "",
+  "showAttribution": true,
+  "attributionSep": " —— ",
+  "backgroundImage": "",
+  "branding": "",
+  "smallText": "每日一言",
+  "clipMedium": 30,
+  "clipWide": 60,
+  "clipLarge": 160,
+  "maxPayloadBytes": 4600
+}
