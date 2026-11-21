@@ -62,6 +62,9 @@ namespace addOneSecond
                 Window.Current.Content = rootFrame;
             }
 
+            // 每次启动都重新探一次：Worker 能连就用 Worker，连不上自动退回 Pages
+            ConfigureTileSource();
+
             if (e.PrelaunchActivated == false)
             {
                 if (rootFrame.Content == null)
@@ -73,6 +76,25 @@ namespace addOneSecond
                 }
                 // 确保当前窗口处于活动状态
                 Window.Current.Activate();
+            }
+        }
+
+        /// <summary>
+        /// 启动时决定磁贴用哪个服务器：优先 Worker，连不上自动退回 Pages。
+        /// 异步探测，不阻塞界面。
+        /// </summary>
+        private async void ConfigureTileSource()
+        {
+            try
+            {
+                var uri = await TileSource.ResolveAsync();
+                var updater = Windows.UI.Notifications.TileUpdateManager.CreateTileUpdaterForApplication();
+                updater.StartPeriodicUpdate(uri, Windows.UI.Notifications.PeriodicUpdateRecurrence.HalfHour);
+                System.Diagnostics.Debug.WriteLine("磁贴源: " + uri);
+            }
+            catch
+            {
+                // 探测失败不影响启动，磁贴继续用清单里的默认地址
             }
         }
 

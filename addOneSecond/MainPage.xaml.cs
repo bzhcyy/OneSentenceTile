@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -458,7 +458,8 @@ namespace addOneSecond
             }
             catch { }
 
-            var tileContent = new Uri("https://add-one-second.addonesecond.workers.dev/tile.xml");  //自建网站
+            // Worker 拉不到会自动退回 Pages（见 TileSource.cs）
+            var tileContent = await TileSource.ResolveAsync();
             var requestedInterval = PeriodicUpdateRecurrence.HalfHour;   //半小时一次
 
             var updater = TileUpdateManager.CreateTileUpdaterForApplication();
