@@ -44,9 +44,10 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 if (-not $root) { $root = (Get-Location).Path }
 
-$sln = Join-Path $root 'OneSentenceTile.sln'
-$manifest = Join-Path $root 'OneSentenceTile\Package.appxmanifest'
-$logDir = Join-Path $root 'build'
+$repoRoot = $root
+$sln = Join-Path $repoRoot 'OneSentenceTile.sln'
+$manifest = Join-Path $repoRoot 'OneSentenceTile\Package.appxmanifest'
+$logDir = Join-Path $repoRoot 'build'
 $log = Join-Path $logDir 'msbuild.log'
 
 function Step([string]$msg) { Write-Host ''; Write-Host "== $msg" -ForegroundColor Cyan }
@@ -121,12 +122,12 @@ $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainTex
 # 根 CA：没有就生成，有就复用（根私钥千万别丢，丢了就得重新让所有人信任新根）
 if (-not (Test-Path $rootPfx)) {
     Write-Host "生成根证书：$rootSubject（10 年）"
-    $root = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
+    $rootCa = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
         -KeyUsage CertSign, CRLSign, DigitalSignature -KeyExportPolicy Exportable `
         -FriendlyName 'KienSticn Root CA' -CertStoreLocation 'Cert:\CurrentUser\My' `
         -TextExtension @('2.5.29.19={text}ca=1&pathlength=1') -NotAfter (Get-Date).AddYears(10)
-    Export-PfxCertificate -Cert $root -FilePath $rootPfx -Password $secure | Out-Null
-    Export-Certificate -Cert $root -FilePath $rootCer | Out-Null
+    Export-PfxCertificate -Cert $rootCa -FilePath $rootPfx -Password $secure | Out-Null
+    Export-Certificate -Cert $rootCa -FilePath $rootCer | Out-Null
 }
 $rootCert = Import-PfxCertificate -FilePath $rootPfx -Password $secure -CertStoreLocation 'Cert:\CurrentUser\My'
 
@@ -162,7 +163,7 @@ Write-Host "根证书（只需要装一次）: $rootCer"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
-$appxDir = Join-Path $root 'OneSentenceTile\AppPackages\'
+$appxDir = Join-Path $repoRoot 'OneSentenceTile\AppPackages\'
 # MSBuild 命令行里的路径统一用正斜杠：反斜杠结尾会转义掉收尾引号，导致 /p 参数解析错乱
 $appxDirArg = ($appxDir -replace '\\', '/')
 $pfxArg = ($pfx -replace '\\', '/')
@@ -235,7 +236,7 @@ else {
 
 if ($Register) {
     Step '注册到本机（开发者模式）'
-    $appxManifest = @(Get-ChildItem (Join-Path $root "OneSentenceTile\bin\$Platform\$Configuration") -Recurse -Filter 'AppxManifest.xml' -ErrorAction SilentlyContinue |
+    $appxManifest = @(Get-ChildItem (Join-Path $repoRoot "OneSentenceTile\bin\$Platform\$Configuration") -Recurse -Filter 'AppxManifest.xml' -ErrorAction SilentlyContinue |
         Select-Object -First 1)
     if (-not $appxManifest) { throw '找不到编译输出的 AppxManifest.xml，无法注册。' }
     Add-AppxPackage -Register $appxManifest.FullName
