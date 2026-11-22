@@ -21,7 +21,6 @@ namespace OneSentenceTile
     {
         private bool _loading;                                   //正在套用设置，别触发保存
         private DispatcherTimer _wallTimer;                      //壁纸轮播定时器
-        private DispatcherTimer _tileTimer;                      //运行期间按间隔刷新磁贴（保证自定义排版）
         private readonly List<StorageFile> _wallFiles = new List<StorageFile>();
         private int _wallIndex;
 
@@ -169,47 +168,6 @@ namespace OneSentenceTile
                 { "Daily", PeriodicUpdateRecurrence.Daily }
             };
 
-        private static int IntervalMinutes(string tag)
-        {
-            switch (tag)
-            {
-                case "HalfHour": return 30;
-                case "Hour": return 60;
-                case "SixHours": return 360;
-                case "TwelveHours": return 720;
-                case "Daily": return 1440;
-                default: return 0;
-            }
-        }
-
-        /// <summary>App 运行期间按间隔刷新磁贴；关掉 App 后由系统的周期更新兜底。</summary>
-        private void StartTileTimer(int minutes)
-        {
-            StopTileTimer();
-            if (minutes <= 0) return;
-
-            _tileTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(minutes) };
-            _tileTimer.Tick += async (s, e) =>
-            {
-                try
-                {
-                    var uri = await TileSource.ResolveContentAsync();
-                    await PushTileNowAsync(uri);
-                }
-                catch { }
-            };
-            _tileTimer.Start();
-        }
-
-        private void StopTileTimer()
-        {
-            if (_tileTimer != null)
-            {
-                _tileTimer.Stop();
-                _tileTimer = null;
-            }
-        }
-
         private static string IntervalLabel(string tag)
         {
             switch (tag)
@@ -229,7 +187,6 @@ namespace OneSentenceTile
             if (!isTileFresh.IsOn)
             {
                 try { updater.StopPeriodicUpdate(); } catch { }
-                StopTileTimer();
                 return;
             }
 
@@ -238,14 +195,13 @@ namespace OneSentenceTile
             if (TileIntervalTag == "Realtime")
             {
                 // 实时：App 现拉 XML，按设置重建排版后立刻推给磁贴
-                StopTileTimer();
                 var contentUri = await TileSource.ResolveContentAsync();
                 await PushTileNowAsync(contentUri);
                 UpdateAlignAvailability(contentUri);
             }
             else
             {
-                // 定时：交给系统按周期去拉（App 关掉后的兜底，排版用服务端默认值）
+                // 定时：交给系统按周期去拉（排版用服务端的默认值）
                 var uri = await TileSource.ResolveAsync();
                 PeriodicUpdateRecurrence recurrence;
                 if (!IntervalMap.TryGetValue(TileIntervalTag, out recurrence))
@@ -258,9 +214,6 @@ namespace OneSentenceTile
                 }
                 catch { }
                 UpdateAlignAvailability(uri);
-
-                // App 开着的时候，同样按这个间隔自己推一次，排版才能跟随设置
-                StartTileTimer(IntervalMinutes(TileIntervalTag));
             }
         }
 
