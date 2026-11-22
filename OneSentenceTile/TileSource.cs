@@ -85,13 +85,13 @@ namespace OneSentenceTile
             {
                 _picked = first;
             }
-            return new Uri(WithType(_picked));
+            return new Uri(WithStyle(WithType(_picked)));
         }
 
         /// <summary>当前选中的地址（没解析过就是 null），便于日志/界面显示。</summary>
         public static string PickedUrl
         {
-            get { return _picked == null ? null : WithType(_picked); }
+            get { return _picked == null ? null : WithStyle(WithType(_picked)); }
         }
 
         private static async Task<bool> ProbeAsync(string url)
@@ -109,6 +109,45 @@ namespace OneSentenceTile
             {
                 return false;
             }
+        }
+
+        // ---------------- 磁贴文字样式（Windows 只支持这几档 hint-style） ----------------
+        public static string StyleTitle
+        {
+            get { return GetSetting("tileTitleStyle", "subheader"); }
+            set { PutSetting("tileTitleStyle", value); }
+        }
+
+        public static string StyleQuote
+        {
+            get { return GetSetting("tileQuoteStyle", "subtitle"); }
+            set { PutSetting("tileQuoteStyle", value); }
+        }
+
+        public static string StyleAttr
+        {
+            get { return GetSetting("tileAttrStyle", "baseSubtle"); }
+            set { PutSetting("tileAttrStyle", value); }
+        }
+
+        /// <summary>拼上样式参数：Worker 会据此改 XML，Pages 静态文件忽略。</summary>
+        public static string WithStyle(string url)
+        {
+            return url + (url.Contains("?") ? "&" : "?")
+                + "titleStyle=" + Uri.EscapeDataString(StyleTitle)
+                + "&quoteStyle=" + Uri.EscapeDataString(StyleQuote)
+                + "&attrStyle=" + Uri.EscapeDataString(StyleAttr);
+        }
+
+        private static string GetSetting(string key, string fallback)
+        {
+            var v = ApplicationData.Current.RoamingSettings.Values[key];
+            return (v as string) ?? fallback;
+        }
+
+        private static void PutSetting(string key, string value)
+        {
+            ApplicationData.Current.RoamingSettings.Values[key] = value ?? "";
         }
     }
 }

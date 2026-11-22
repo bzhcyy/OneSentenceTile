@@ -61,11 +61,17 @@ namespace OneSentenceTile
             SelectComboByTag(hitokotoTypeCombo, TileSource.HitokotoType);
             SelectComboByTag(wallpaperModeCombo, WallpaperMode);
             SelectComboByTag(wallpaperIntervalCombo, WallpaperIntervalMin.ToString());
+            SelectComboByTag(tileTitleStyleCombo, TileSource.StyleTitle);
+            SelectComboByTag(tileQuoteStyleCombo, TileSource.StyleQuote);
+            SelectComboByTag(tileAttrStyleCombo, TileSource.StyleAttr);
+            SelectComboByTag(uiFontCombo, GetString("uiFont", ""));
             wallpaperUrlBox.Text = GetString("wallUrl", "");
             _loading = false;
 
             SetBcakGroundColor();
             SetForeColor();
+            ApplyUiFont();
+            ApplyTitleBarTheme();
             await ApplyWallpaperAsync();
             await LoadDailyQuoteAsync();
             await ApplyTileAsync();
@@ -246,6 +252,73 @@ namespace OneSentenceTile
             }
         }
 
+        // ------------------------------------------------------------ 磁贴文字样式 / 界面字体
+        private async void tileTitleStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileTitleStyleCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.StyleTitle = (string)item.Tag;
+            if (_loading) return;
+            await ApplyTileAsync();
+        }
+
+        private async void tileQuoteStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileQuoteStyleCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.StyleQuote = (string)item.Tag;
+            if (_loading) return;
+            await ApplyTileAsync();
+        }
+
+        private async void tileAttrStyleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileAttrStyleCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.StyleAttr = (string)item.Tag;
+            if (_loading) return;
+            await ApplyTileAsync();
+        }
+
+        private void uiFontCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = uiFontCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            SetString("uiFont", (string)item.Tag);
+            if (_loading) return;
+            ApplyUiFont();
+        }
+
+        /// <summary>界面字体（磁贴字体由 Windows 决定，不支持自定义）。</summary>
+        private void ApplyUiFont()
+        {
+            var name = GetString("uiFont", "");
+            var family = string.IsNullOrWhiteSpace(name) ? null : new FontFamily(name);
+            if (family != null)
+            {
+                dailyQuoteText.FontFamily = family;
+                dailyQuoteFrom.FontFamily = family;
+                headerText.FontFamily = family;
+            }
+        }
+
+        /// <summary>右上角标题栏按钮跟随主题：有壁纸时用白字，否则黑字。</summary>
+        private void ApplyTitleBarTheme()
+        {
+            try
+            {
+                var bar = Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().TitleBar;
+                var dark = WallpaperMode != "none";
+                bar.ButtonBackgroundColor = Colors.Transparent;
+                bar.ButtonInactiveBackgroundColor = Colors.Transparent;
+                bar.ButtonForegroundColor = dark ? Colors.White : Colors.Black;
+                bar.ButtonInactiveForegroundColor = dark ? Color.FromArgb(160, 255, 255, 255) : Color.FromArgb(160, 0, 0, 0);
+                bar.ButtonHoverBackgroundColor = dark ? Color.FromArgb(40, 255, 255, 255) : Color.FromArgb(30, 0, 0, 0);
+                bar.ButtonPressedBackgroundColor = dark ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(50, 0, 0, 0);
+            }
+            catch { }
+        }
+
         // ------------------------------------------------------------ 壁纸
         private string WallpaperMode
         {
@@ -374,6 +447,7 @@ namespace OneSentenceTile
             WallpaperMode = (string)item.Tag;
             if (_loading) return;
             await ApplyWallpaperAsync();
+            ApplyTitleBarTheme();
         }
 
         private async void wallpaperIntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)

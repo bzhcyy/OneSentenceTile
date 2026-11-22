@@ -61,6 +61,55 @@
                         <ComboBoxItem Content="抖机灵" Tag="l"/>
                     </ComboBox>
 
+
+                    <TextBlock Text="磁贴文字" FontSize="16" FontWeight="SemiBold" Foreground="#666" Margin="12,10,0,0"/>
+
+                    <TextBlock Text="标题大小：" FontSize="14" Margin="12,2,0,0"/>
+                    <ComboBox Name="tileTitleStyleCombo" Margin="8,0,8,4" HorizontalAlignment="Stretch" SelectionChanged="tileTitleStyleCombo_SelectionChanged">
+                        <ComboBoxItem Content="极小 12" Tag="caption"/>
+                        <ComboBoxItem Content="小 15" Tag="base"/>
+                        <ComboBoxItem Content="中 20" Tag="subtitle"/>
+                        <ComboBoxItem Content="大 24" Tag="title"/>
+                        <ComboBoxItem Content="特大 34" Tag="subheader"/>
+                        <ComboBoxItem Content="巨大 46" Tag="header"/>
+                        <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
+                        <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
+                    </ComboBox>
+
+                    <TextBlock Text="正文大小：" FontSize="14" Margin="12,2,0,0"/>
+                    <ComboBox Name="tileQuoteStyleCombo" Margin="8,0,8,4" HorizontalAlignment="Stretch" SelectionChanged="tileQuoteStyleCombo_SelectionChanged">
+                        <ComboBoxItem Content="极小 12" Tag="caption"/>
+                        <ComboBoxItem Content="小 15" Tag="base"/>
+                        <ComboBoxItem Content="中 20" Tag="subtitle"/>
+                        <ComboBoxItem Content="大 24" Tag="title"/>
+                        <ComboBoxItem Content="特大 34" Tag="subheader"/>
+                        <ComboBoxItem Content="巨大 46" Tag="header"/>
+                        <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
+                        <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
+                    </ComboBox>
+
+                    <TextBlock Text="出处大小：" FontSize="14" Margin="12,2,0,0"/>
+                    <ComboBox Name="tileAttrStyleCombo" Margin="8,0,8,6" HorizontalAlignment="Stretch" SelectionChanged="tileAttrStyleCombo_SelectionChanged">
+                        <ComboBoxItem Content="极小 12" Tag="caption"/>
+                        <ComboBoxItem Content="小 15" Tag="base"/>
+                        <ComboBoxItem Content="中 20" Tag="subtitle"/>
+                        <ComboBoxItem Content="大 24" Tag="title"/>
+                        <ComboBoxItem Content="特大 34" Tag="subheader"/>
+                        <ComboBoxItem Content="巨大 46" Tag="header"/>
+                        <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
+                        <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
+                    </ComboBox>
+
+                    <TextBlock Text="界面字体：" FontSize="14" Margin="12,4,0,0"/>
+                    <ComboBox Name="uiFontCombo" Margin="8,0,8,6" HorizontalAlignment="Stretch" SelectionChanged="uiFontCombo_SelectionChanged">
+                        <ComboBoxItem Content="系统默认" Tag=""/>
+                        <ComboBoxItem Content="微软雅黑" Tag="Microsoft YaHei UI"/>
+                        <ComboBoxItem Content="等线" Tag="DengXian"/>
+                        <ComboBoxItem Content="宋体" Tag="SimSun"/>
+                        <ComboBoxItem Content="楷体" Tag="KaiTi"/>
+                        <ComboBoxItem Content="Consolas" Tag="Consolas"/>
+                    </ComboBox>
+
                     <!-- 窗口 -->
                     <TextBlock Text="窗口" FontSize="16" FontWeight="SemiBold" Foreground="#666" Margin="12,10,0,0"/>
                     <ToggleSwitch Name="isDisplayRequest"
@@ -186,9 +235,9 @@
                                Text="每日一言"
                                Grid.Row="0"
                                HorizontalAlignment="Center"
-                               FontSize="22"
+                               FontSize="30"
                                FontWeight="SemiBold"
-                               Margin="0,18,0,0"/>
+                               Margin="0,22,0,0"/>
 
                     <ScrollViewer Grid.Row="1"
                                   VerticalAlignment="Center"
