@@ -92,23 +92,19 @@ git tag v1.3.0 && git push origin v1.3.0
 powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release -NoDotNetNative
 ```
 
-### 签名证书（装一次，以后更新不用再装）
+### 签名证书
 
-`build-uwp.ps1` 用的是「自签根 CA + 由根签发的代码签名证书」两层结构：
+用一张自签的代码签名证书（`CN=KienSticn`），构建时缓存在 Actions 的 `build/cert` 里，
+**同一个缓存不清理，证书就不会变**，所以后续更新版本不用重新装证书。
 
-| 文件 | 用途 |
-|---|---|
-| `KienSticnRootCA.cer` | **只需要装一次**，装进「受信任的根证书颁发机构」 |
-| `OneSentenceTile_<版本>_x64.cer` | 叶证书，跟着安装包走；换了也仍然链到同一个根 |
-
-所以以后出新版本（重新签发叶证书），你机器上信任的根不变，**不用再手动装证书**。
-根私钥缓存在 Actions 的 `build/cert` 里（`uwp-dev-cert-v2`），千万别清这个缓存——
-清了就等于换了根，所有人都得重新信任一次。
+首次安装时把它装进「受信任人」即可（管理员 PowerShell）：
 
 ```powershell
-# 管理员 PowerShell，只需执行一次
-Import-Certificate -FilePath .\KienSticnRootCA.cer -CertStoreLocation Cert:\LocalMachine\Root
+Import-Certificate -FilePath .\OneSentenceTile_1.3.14.0_x64.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
 ```
+
+> 换缓存 key 或清空缓存会重新生成证书，那时需要再导入一次。
+> 证书有效期 5 年，剩不到 30 天会自动重签。
 
 ## 安装
 
