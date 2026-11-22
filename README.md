@@ -108,6 +108,18 @@ Import-Certificate -FilePath .\OneSentenceTile_1.3.14.0_x64.cer -CertStoreLocati
 
 ## 安装
 
+一键（管理员 PowerShell，在解压后的目录里）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-app.ps1
+```
+
+它会自动把证书导入「受信任人」再装包。手动安装见下。
+
+> ⚠️ 证书必须装在 **受信任人（Trusted People）**，不是「受信任的根证书颁发机构」。
+> 装到根会报「证书缺少基本约束扩展」。
+
+
 1. 卸载旧版（历史版本 Identity 是 `800948F61A16.1s`）
 2. 装新的 `OneSentenceTile_<版本>_x64.appxbundle`（首次需信任自签证书）
 3. 打开 App → 设置 → 打开「动态磁贴」

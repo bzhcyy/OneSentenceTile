@@ -147,13 +147,15 @@ else {
     Write-Host "生成自签证书：Subject=$publisher（5 年）"
     $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher `
         -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' `
+        -TextExtension @('2.5.29.19={text}ca=1&pathlength=0') `
         -NotAfter (Get-Date).AddYears(5)
     Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
     Export-Certificate -Cert $cert -FilePath $cer | Out-Null
     Write-Host "已生成: $pfx / $cer"
 }
 
-Write-Host "安装证书（受信任人）: Import-Certificate -FilePath '$cer' -CertStoreLocation Cert:\LocalMachine\TrustedPeople"
+Write-Host "安装证书（受信任人，不是受信任的根）: Import-Certificate -FilePath '$cer' -CertStoreLocation Cert:\LocalMachine\TrustedPeople"
+Write-Host "或用一键安装脚本: powershell -ExecutionPolicy Bypass -File .\install-app.ps1"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
