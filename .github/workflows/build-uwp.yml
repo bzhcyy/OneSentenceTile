@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/cert
-          key: uwp-dev-cert-v5
+          key: uwp-dev-cert-v7
 
       - name: 使用固定证书（可选，来自 Secrets）
         shell: pwsh
@@ -133,6 +133,18 @@ jobs:
           $lines += '安装：解压 artifact 后，右键 `Add-AppDevPackage.ps1` → 使用 PowerShell 运行（会自动装证书并安装）。'
           $lines += '首次安装需要管理员权限；装完打开 App，把“动态磁贴”关一次再打开即可看到磁贴文字。'
           $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+
+      - name: 把安装脚本和证书放进安装包目录
+        shell: pwsh
+        run: |
+          $test = Get-ChildItem OneSentenceTile/AppPackages -Directory -Filter '*_Test' |
+                  Sort-Object Name -Descending | Select-Object -First 1
+          if (-not $test) { Write-Warning '没找到 *_Test 目录，跳过'; exit 0 }
+          if (Test-Path install-app.ps1) { Copy-Item install-app.ps1 $test.FullName -Force }
+          if (Test-Path '安装.cmd') { Copy-Item '安装.cmd' $test.FullName -Force }
+          Get-ChildItem build/cert -Filter '*.cer' -ErrorAction SilentlyContinue |
+              ForEach-Object { Copy-Item $_.FullName $test.FullName -Force }
+          Get-ChildItem $test.FullName | ForEach-Object { Write-Host ("  " + $_.Name) }
 
       - name: 证书备份（编译失败也上传）
         if: always()
