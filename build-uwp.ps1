@@ -99,17 +99,20 @@ if ($ForceMobileSdk) { $includeMobile = $true }
 Write-Host ("Windows Mobile Extensions: " + $(if ($mobileFound) { '已安装' } else { '未安装' }) + "；本次 IncludeMobileSdk=$($includeMobile.ToString().ToLower())")
 if ($includeMobile -and -not $mobileFound) { Write-Warning '强制引用 Windows Mobile 扩展，但它没装，编译大概率报 SDKReference 找不到。' }
 
-# ---------- 4. 证书（单张自签测试证书，CA=1 + Code Signing，VS 临时密钥同款）----------
-# 关键点：Add-AppDevPackage.ps1 看到「自签名」证书会装进「受信任的根」，而根证书
-# 必须有 Basic Constraints(CA=1)。之前用 -Type CodeSigningCert 生成的是「非 CA」叶子，
-# 装进根就报「证书缺少基本约束扩展」。
-# 这里用 -Type Custom 明确补上 CA=1 和 Code Signing EKU，两个条件都满足：
-#   * 有 CA=1 → 装进根不报错
-#   * 有 Code Signing EKU → AppX 签名合法（不会 APPX0107）
+# ---------- 4. 证书（根 CA + 叶证书，唯一能同时满足签名和信任的结构）----------
+# 为什么必须两层（前几版反复踩坑的结论）：
+#   * 单张「非 CA」自签证书 → AppX 能签，但它是链的根，而根必须是 CA，
+#     安装时报「证书缺少基本约束扩展」。
+#   * 单张「CA=1」证书 → 能装进受信任的根，但 AppX 拒绝用 CA 证书签名（APPX0107）。
+#   * 根 CA（CA=1，只签发证书）+ 叶证书（非 CA，Code Signing EKU）→ 两个问题都没有。
+# 安装时：根 → 受信任的根（只需一次），叶 → 受信任人（或由 Add-AppDevPackage 自动装）。
 Step '准备签名证书'
 $certDir = Join-Path $logDir 'cert'
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
 
+$rootSubject = 'CN=OneSentenceTile Dev Root'
+$rootPfx = Join-Path $certDir 'OneSentenceTileRoot.pfx'
+$rootCer = Join-Path $certDir 'OneSentenceTileRoot.cer'
 $pfx = Join-Path $certDir 'OneSentenceTile.pfx'
 $cer = Join-Path $certDir 'OneSentenceTile.cer'
 
@@ -120,17 +123,28 @@ $manifestVersion = [regex]::Match($manifestText, 'Version="([\d.]+)"').Groups[1]
 Write-Host "清单版本: $manifestVersion（打包产物应是 OneSentenceTile_${manifestVersion}_*.appxbundle）"
 $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
 
-# 带密码读 PFX，避免 Get-PfxCertificate 弹密码框把 CI 卡死
 function Read-PfxCert([string]$path) {
     return New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($path, $CertificatePassword)
 }
 
-function Test-CertOk([string]$path) {
+# --- 根 CA：CA=1，只用来签发叶证书；没有就生成（10 年）---
+if (-not (Test-Path $rootPfx)) {
+    Write-Host "生成根证书：$rootSubject（10 年）"
+    $rootCa = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
+        -KeyUsage CertSign, CRLSign -KeyExportPolicy Exportable `
+        -FriendlyName 'OneSentenceTile Dev Root' -CertStoreLocation 'Cert:\CurrentUser\My' `
+        -TextExtension @('2.5.29.19={text}ca=1&pathlength=0') -NotAfter (Get-Date).AddYears(10)
+    Export-PfxCertificate -Cert $rootCa -FilePath $rootPfx -Password $secure | Out-Null
+    Export-Certificate -Cert $rootCa -FilePath $rootCer | Out-Null
+}
+$rootCert = Import-PfxCertificate -FilePath $rootPfx -Password $secure -CertStoreLocation 'Cert:\CurrentUser\My'
+
+function Test-LeafOk([string]$path) {
     if (-not (Test-Path $path)) { return $false }
     try {
         $c = Read-PfxCert $path
-        if ($c.Subject -ne $publisher) { Write-Host "已有证书 Subject=$($c.Subject)，与清单 $publisher 不一致，重签"; return $false }
-        if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有证书快过期，重签"; return $false }
+        if ($c.Subject -ne $publisher) { Write-Host "已有叶证书 Subject=$($c.Subject)，与清单不一致，重签"; return $false }
+        if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有叶证书快过期，重签"; return $false }
         return $true
     }
     catch { return $false }
@@ -141,25 +155,21 @@ if ($CertificatePath) {
     $pfx = (Resolve-Path $CertificatePath).Path
     Write-Host "使用指定证书: $pfx"
 }
-elseif (Test-CertOk $pfx) {
-    Write-Host "复用已有证书: $pfx"
+elseif (Test-LeafOk $pfx) {
+    Write-Host "复用已有叶证书: $pfx"
 }
 else {
-    Write-Host "生成自签测试证书：Subject=$publisher（5 年，CA + Code Signing）"
-    $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher `
-        -KeyUsage @('DigitalSignature', 'CertSign') -KeyExportPolicy Exportable `
-        -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' `
-        -TextExtension @(
-            '2.5.29.19={text}ca=1&pathlength=0',
-            '2.5.29.37={text}1.3.6.1.5.5.7.3.3'
-        ) `
-        -NotAfter (Get-Date).AddYears(5)
-    Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
-    Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+    Write-Host "用根证书签发叶证书：$publisher（3 年，非 CA + Code Signing）"
+    $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -Signer $rootCert `
+        -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
+    # 只把叶证书打进 pfx：带链会让 Signtool 看到两张证书而报 APPX1204
+    Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $secure -ChainOption EndEntityCertOnly | Out-Null
+    Export-Certificate -Cert $leaf -FilePath $cer | Out-Null
     Write-Host "已生成: $pfx / $cer"
 }
 
-Write-Host "证书（右键 Add-AppDevPackage.ps1 会自动装进受信任的根）: $cer"
+Write-Host "根证书（装一次到受信任的根）: $rootCer"
+Write-Host "叶证书（自动装或被 Add-AppDevPackage 处理）: $cer"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
