@@ -114,19 +114,19 @@ namespace OneSentenceTile
         // ---------------- 磁贴文字样式（Windows 只支持这几档 hint-style） ----------------
         public static string StyleTitle
         {
-            get { return GetSetting("tileTitleStyle", "subheader"); }
+            get { return GetSetting("tileTitleStyle", "title"); }
             set { PutSetting("tileTitleStyle", value); }
         }
 
         public static string StyleQuote
         {
-            get { return GetSetting("tileQuoteStyle", "subtitle"); }
+            get { return GetSetting("tileQuoteStyle", "base"); }
             set { PutSetting("tileQuoteStyle", value); }
         }
 
         public static string StyleAttr
         {
-            get { return GetSetting("tileAttrStyle", "baseSubtle"); }
+            get { return GetSetting("tileAttrStyle", "captionSubtle"); }
             set { PutSetting("tileAttrStyle", value); }
         }
 
@@ -165,6 +165,14 @@ namespace OneSentenceTile
                 + "&showAttr=" + (ShowAttr ? "1" : "0")
                 + "&titleAlign=" + Uri.EscapeDataString(TitleAlign)
                 + "&attrAlign=" + Uri.EscapeDataString(AttrAlign);
+        }
+
+        /// <summary>拉取内容用的地址：强制带标题和出处，方便 App 本地重建 XML。</summary>
+        public static async Task<Uri> ResolveContentAsync()
+        {
+            var uri = await ResolveAsync();
+            var text = uri.AbsoluteUri;
+            return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
         }
 
         private static string GetSetting(string key, string fallback)

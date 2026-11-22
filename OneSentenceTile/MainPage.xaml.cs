@@ -73,9 +73,9 @@ namespace OneSentenceTile
             SelectComboByTag(tileAttrAlignCombo, TileSource.AttrAlign);
             SelectComboByTag(uiFontCombo, GetString("uiFont", ""));
             customFontBox.Text = GetString("uiFontCustom", "");
-            SelectComboByTag(uiTitleSizeCombo, GetString("uiTitleSize", "30"));
-            SelectComboByTag(uiQuoteSizeCombo, GetString("uiQuoteSize", "36"));
-            SelectComboByTag(uiFromSizeCombo, GetString("uiFromSize", "18"));
+            SelectComboByTag(uiTitleSizeCombo, GetString("uiTitleSize", "60"));
+            SelectComboByTag(uiQuoteSizeCombo, GetString("uiQuoteSize", "40"));
+            SelectComboByTag(uiFromSizeCombo, GetString("uiFromSize", "20"));
             uiTitleBold.IsOn = GetBool("uiTitleBold", true);
             uiQuoteBold.IsOn = GetBool("uiQuoteBold", true);
             uiFromBold.IsOn = GetBool("uiFromBold", false);
@@ -151,7 +151,7 @@ namespace OneSentenceTile
                 return;
             }
 
-            var uri = await TileSource.ResolveAsync();
+            var uri = await TileSource.ResolveContentAsync();
             try { TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate(); } catch { }
             await PushTileNowAsync(uri);
             UpdateAlignAvailability(uri);
@@ -174,20 +174,107 @@ namespace OneSentenceTile
         {
             try
             {
+                string remote;
                 using (var http = new System.Net.Http.HttpClient())
                 {
                     http.Timeout = TimeSpan.FromSeconds(8);
-                    var xml = await http.GetStringAsync(uri);
-                    var doc = new Windows.Data.Xml.Dom.XmlDocument();
-                    doc.LoadXml(xml);
-                    TileUpdateManager.CreateTileUpdaterForApplication().Update(new TileNotification(doc));
+                    remote = await http.GetStringAsync(uri);
                 }
+
+                // 服务器只负责提供文字，排版（字号/对齐/开关）由 App 按用户设置重建，
+                // 这样 Pages 静态源也能用同一套样式。
+                var localXml = RebuildTileXml(remote);
+                var doc = new Windows.Data.Xml.Dom.XmlDocument();
+                doc.LoadXml(localXml);
+                TileUpdateManager.CreateTileUpdaterForApplication().Update(new TileNotification(doc));
                 return true;
             }
             catch
             {
                 return false;
             }
+        }
+
+        private static string XmlEscape(string value)
+        {
+            return (value ?? "")
+                .Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;")
+                .Replace("\"", "&quot;").Replace("'", "&apos;");
+        }
+
+
+        /// <summary>把服务器给的文字重新排成磁贴 XML（字号/对齐/开关全部按设置来）。</summary>
+        private string RebuildTileXml(string remoteXml)
+        {
+            string title = "每日一言";
+            string quote = "";
+            string attr = "";
+
+            try
+            {
+                var doc = System.Xml.Linq.XDocument.Parse(remoteXml);
+                var large = doc.Descendants("binding")
+                    .FirstOrDefault(b => (string)b.Attribute("template") == "TileLarge")
+                    ?? doc.Descendants("binding").LastOrDefault();
+                var texts = large != null
+                    ? large.Elements("text").Select(x => (x.Value ?? "").Trim()).Where(x => x.Length > 0).ToList()
+                    : new List<string>();
+
+                if (texts.Count >= 3)
+                {
+                    title = texts[0];
+                    quote = texts[1];
+                    attr = texts[2];
+                }
+                else if (texts.Count == 2)
+                {
+                    // 没出处：判断第一段是不是标题
+                    if (texts[0] == "每日一言") { title = texts[0]; quote = texts[1]; }
+                    else { quote = texts[0]; attr = texts[1]; }
+                }
+                else if (texts.Count == 1)
+                {
+                    quote = texts[0];
+                }
+            }
+            catch
+            {
+                quote = "（磁贴内容解析失败）";
+            }
+
+            if (string.IsNullOrWhiteSpace(quote)) quote = "（今日一言暂时取不到）";
+
+            var indent = "\u3000\u3000";
+            var tStyle = TileSource.StyleTitle;
+            var qStyle = TileSource.StyleQuote;
+            var aStyle = TileSource.StyleAttr;
+            var tAlign = TileSource.TitleAlign;
+            var aAlign = TileSource.AttrAlign;
+
+            string Text(string style, string body, string align, int maxLines)
+            {
+                var extra = string.IsNullOrEmpty(align) ? "" : " hint-align=\"" + align + "\"";
+                if (maxLines > 0) extra += " hint-maxLines=\"" + maxLines + "\"";
+                return "<text hint-style=\"" + style + "\"" + extra + " hint-wrap=\"true\">"
+                    + XmlEscape(body) + "</text>";
+            }
+
+            var sb = new System.Text.StringBuilder();
+            sb.Append("<?xml version=\"1.0\" encoding=\"utf-8\"?><tile><visual version=\"2\">");
+            sb.Append("<binding template=\"TileSmall\">").Append(Text("caption", "每日一言", "", 0)).Append("</binding>");
+            sb.Append("<binding template=\"TileMedium\">").Append(Text(qStyle, indent + quote, "", 0)).Append("</binding>");
+            sb.Append("<binding template=\"TileWide\">");
+            if (TileSource.ShowTitle) sb.Append(Text(tStyle, title, tAlign, 0));
+            sb.Append(Text(qStyle, indent + quote, "", 0));
+            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 0));
+            sb.Append("</binding>");
+            sb.Append("<binding template=\"TileLarge\">");
+            if (TileSource.ShowTitle) sb.Append(Text(tStyle, title, tAlign, 0));
+            sb.Append(Text(qStyle, indent + quote, "", 5));
+            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 0));
+            sb.Append("</binding>");
+            sb.Append("</visual></tile>");
+            return sb.ToString();
         }
 
         private async void refreshTileButton_Click(object sender, RoutedEventArgs e)
@@ -321,9 +408,9 @@ namespace OneSentenceTile
             ApplyAlign(headerText, TileSource.TitleAlign);
             ApplyAlign(dailyQuoteFrom, TileSource.AttrAlign);
 
-            headerText.FontSize = ParseDouble(GetString("uiTitleSize", "30"), 30);
-            dailyQuoteText.FontSize = ParseDouble(GetString("uiQuoteSize", "36"), 36);
-            dailyQuoteFrom.FontSize = ParseDouble(GetString("uiFromSize", "18"), 18);
+            headerText.FontSize = ParseDouble(GetString("uiTitleSize", "60"), 30);
+            dailyQuoteText.FontSize = ParseDouble(GetString("uiQuoteSize", "40"), 36);
+            dailyQuoteFrom.FontSize = ParseDouble(GetString("uiFromSize", "20"), 18);
 
             headerText.FontWeight = GetBool("uiTitleBold", true) ? FontWeights.Bold : FontWeights.Normal;
             dailyQuoteText.FontWeight = GetBool("uiQuoteBold", true) ? FontWeights.Bold : FontWeights.Normal;
@@ -646,10 +733,22 @@ namespace OneSentenceTile
         {
             try
             {
+                var view = Windows.UI.ViewManagement.ApplicationView.GetForCurrentView();
                 if (isfullScreen.IsOn)
-                    Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().TryEnterFullScreenMode();
+                {
+                    if (!view.TryEnterFullScreenMode())
+                    {
+                        // 窗口刚激活时可能失败，稍后再试一次
+                        _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
+                        {
+                            try { view.TryEnterFullScreenMode(); } catch { }
+                        });
+                    }
+                }
                 else
-                    Windows.UI.ViewManagement.ApplicationView.GetForCurrentView().ExitFullScreenMode();
+                {
+                    view.ExitFullScreenMode();
+                }
             }
             catch { }
             if (!_loading) SetBool("fullscreen", isfullScreen.IsOn);
@@ -746,7 +845,7 @@ namespace OneSentenceTile
                         BackgroundSource = AcrylicBackgroundSource.HostBackdrop,
                         TintColor = color,
                         FallbackColor = color,
-                        TintOpacity = BackGroundAcrylicBlueSlider.Value / 100
+                        TintOpacity = 1 - BackGroundAcrylicBlueSlider.Value / 100
                     };
                     mainGrid.Background = brush;
                 }
