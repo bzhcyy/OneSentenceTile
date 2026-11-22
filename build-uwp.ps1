@@ -283,8 +283,32 @@ if ($pkgs.Count -eq 0) {
 else {
     $pkgs | ForEach-Object { Write-Host ("  " + $_.FullName + "  (" + [math]::Round($_.Length / 1MB, 2) + " MB)") }
     Write-Host ''
-    Write-Host '安装：解压后右键 Add-AppDevPackage.ps1 → 使用 PowerShell 运行（会自动装证书再装包）。' -ForegroundColor Green
-    if (Test-Path $cer) { Write-Host "证书：$cer（需要时：Import-Certificate -FilePath '$cer' -CertStoreLocation Cert:\LocalMachine\TrustedPeople）" }
+    Write-Host '安装：解压后双击 安装.cmd（自动装证书 + 依赖框架 + 主程序）。' -ForegroundColor Green
+    if (Test-Path $cer) { Write-Host "证书：$cer（手动装：Import-Certificate -FilePath '$cer' -CertStoreLocation Cert:\LocalMachine\TrustedPeople）" }
+}
+
+# ---------- 7. CI Summary ----------
+if ($env:GITHUB_STEP_SUMMARY) {
+    $lines = @()
+    $lines += '## 一言 Tile 构建结果'
+    $lines += ''
+    $lines += "| 项 | 值 |"
+    $lines += "|---|---|"
+    $lines += "| 版本 | ``$manifestVersion`` |"
+    $lines += "| 配置 | $Configuration / $Platform |"
+    $lines += "| 签名证书 | ``$publisher``（$(if (Test-Path $cer) { '已生成' } else { '复用缓存' })） |"
+    $lines += "| 安装包 | $(if ($pkgs.Count -gt 0) { ($pkgs | ForEach-Object { $_.Name }) -join '<br>' } else { '未生成' }) |"
+    $lines += ''
+    if ($pkgs.Count -gt 0) {
+        $lines += '### 安装'
+        $lines += ''
+        $lines += '1. 下载下方 artifact ``uwp-package`` 并解压'
+        $lines += '2. 双击 ``安装.cmd``（自动提权 → 装证书到受信任人 → 装依赖 → 装主程序）'
+        $lines += '3. 打开 App，设置里确认「动态磁贴」已开'
+        $lines += ''
+        $lines += '> 报错对照：``0x80073CF3`` = 依赖没装；「缺少基本约束扩展」= 证书装到了受信任的根。'
+    }
+    $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
 }
 
 if ($Register) {

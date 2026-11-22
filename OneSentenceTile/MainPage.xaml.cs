@@ -218,19 +218,6 @@ namespace OneSentenceTile
             }
         }
 
-        private static string IntervalLabel(string tag)
-        {
-            switch (tag)
-            {
-                case "HalfHour": return "30 分钟";
-                case "Hour": return "1 小时";
-                case "SixHours": return "6 小时";
-                case "TwelveHours": return "12 小时";
-                case "Daily": return "24 小时";
-                default: return "实时";
-            }
-        }
-
         private async Task ApplyTileAsync()
         {
             var updater = TileUpdateManager.CreateTileUpdaterForApplication();
@@ -253,7 +240,11 @@ namespace OneSentenceTile
             }
             else
             {
-                // 定时：交给系统按周期去拉（App 关掉后的兜底，排版用服务端默认值）
+                // 定时：先立刻推一次（选完就能看到效果），再交给系统按周期兜底
+                var contentUri = await TileSource.ResolveContentAsync();
+                await PushTileNowAsync(contentUri);
+                UpdateAlignAvailability(contentUri);
+
                 var uri = await TileSource.ResolveAsync();
                 PeriodicUpdateRecurrence recurrence;
                 if (!IntervalMap.TryGetValue(TileIntervalTag, out recurrence))
@@ -265,9 +256,8 @@ namespace OneSentenceTile
                     updater.StartPeriodicUpdate(uri, recurrence);
                 }
                 catch { }
-                UpdateAlignAvailability(uri);
 
-                // App 开着的时候，同样按这个间隔自己推一次，排版才能跟随设置
+                // App 开着的时候，按这个间隔自己推，排版才能跟随设置
                 StartTileTimer(IntervalMinutes(TileIntervalTag));
             }
         }
@@ -514,7 +504,15 @@ namespace OneSentenceTile
                 dailyQuoteFrom.ClearValue(TextBlock.FontFamilyProperty);
                 return;
             }
-            var family = new FontFamily(name);
+            var chain = name;
+            foreach (var fallback in new[] { "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI" })
+            {
+                if (chain.IndexOf(fallback, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    chain += ", " + fallback;
+                }
+            }
+            var family = new FontFamily(chain);
             headerText.FontFamily = family;
             dailyQuoteText.FontFamily = family;
             dailyQuoteFrom.FontFamily = family;
@@ -960,14 +958,13 @@ namespace OneSentenceTile
                 var g = (byte)BackGroundColorGreenSlider.Value;
                 var b = (byte)BackGroundColorBlueSlider.Value;
                 var transparency = BackGroundAcrylicBlueSlider.Value / 100.0;          // 1 = 全透明
-                var alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(255 * (1 - transparency))));
+                var alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(255 * transparency)));
 
                 // 全屏时窗口没有桌面背景，HostBackdrop 亚克力不会显示，
                 // 改用带 alpha 的纯色，滑块才有可见效果。
-                var fullscreen = false;
-                try { fullscreen = isfullScreen.IsOn; } catch { }
+                var canAcrylic = Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase");
 
-                if (!fullscreen && Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase"))
+                if (canAcrylic)
                 {
                     mainGrid.Background = new AcrylicBrush
                     {

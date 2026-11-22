@@ -209,53 +209,81 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="refresh" content="120">
-<title>一言 Tile 磁贴服务器</title>
+<title>一言 Tile · 磁贴服务器</title>
 <style>
-  :root {{ color-scheme: dark; }}
-  * {{ box-sizing: border-box; }}
-  body {{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-         background:#111214; color:#eceff3;
-         font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }}
-  main {{ width:100%; max-width:680px; padding:48px 24px; }}
-  h1 {{ font-size:24px; font-weight:700; margin:0 0 4px; letter-spacing:.02em; }}
-  .sub {{ color:#8b93a1; font-size:13px; margin:0 0 36px; }}
-  blockquote {{ margin:0 0 10px; font-size:26px; line-height:1.6; font-weight:600; }}
-  .from {{ margin:0 0 40px; text-align:right; color:#9aa3b2; font-size:15px; }}
-  .meta {{ display:grid; grid-template-columns:88px 1fr; gap:6px 16px; font-size:13px;
-           color:#8b93a1; border-top:1px solid #23262d; padding-top:20px; }}
-  .meta code {{ font-size:12px; color:#c9d2e0; word-break:break-all; }}
-  a {{ color:#7cc4ff; text-decoration:none; }}
-  a:hover {{ text-decoration:underline; }}
-  .cats {{ display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }}
-  .cats a {{ background:#1b1f26; border:1px solid #262b34; border-radius:999px;
-             padding:5px 12px; font-size:12px; color:#b8c2d2; }}
+  :root { color-scheme: light dark; --fg:#1b1f27; --dim:#6b7280; --line:#e5e7eb; --bg:#f7f8fa; --card:#fff; --a:#2563eb; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg:#e8ecf3; --dim:#98a2b3; --line:#262b34; --bg:#101216; --card:#171a20; --a:#7cb2ff; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:16px/1.75 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:56px 22px 72px; }
+  h1 { font-size:26px; margin:0 0 6px; letter-spacing:.01em; }
+  .sub { color:var(--dim); font-size:13px; margin:0 0 30px; }
+  .quote { background:var(--card); border:1px solid var(--line); border-radius:14px;
+           padding:26px 26px 20px; margin:0 0 12px; }
+  .quote p { margin:0; font-size:24px; line-height:1.65; font-weight:600; }
+  .quote .from { margin-top:12px; text-align:right; color:var(--dim); font-size:14px; font-weight:400; }
+  .hint { color:var(--dim); font-size:12px; margin:0 0 34px; text-align:right; }
+  h2 { font-size:15px; margin:34px 0 10px; color:var(--dim); font-weight:600; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  td { padding:7px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+  td:first-child { color:var(--dim); width:96px; white-space:nowrap; }
+  code { font-size:12px; word-break:break-all; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chips a { background:var(--card); border:1px solid var(--line); border-radius:999px;
+             padding:5px 13px; font-size:12px; color:var(--fg); text-decoration:none; }
+  .chips a:hover { border-color:var(--a); color:var(--a); }
+  ol { margin:0; padding-left:20px; font-size:14px; }
+  ol li { margin:6px 0; }
+  a { color:var(--a); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  footer { margin-top:44px; padding-top:18px; border-top:1px solid var(--line);
+           color:var(--dim); font-size:12px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>一言 Tile 磁贴服务器</h1>
-  <p class="sub">Windows 磁贴 · 每小时自动更新 · 数据来自 <a href="https://hitokoto.cn">一言（hitokoto）</a></p>
+  <h1>一言 Tile · 磁贴服务器</h1>
+  <p class="sub">Windows 10 / 11 桌面磁贴 · 每 15 分钟生成 · 数据来自 <a href="https://hitokoto.cn">hitokoto</a></p>
 
-  <blockquote id="quote">__QUOTE__</blockquote>
-  <p class="from" id="from">__FROM__</p>
-
-  <div class="meta">
-    <div>生成时间</div><div>__TIME__</div>
-    <div>磁贴地址</div><div><code>__TILE__</code></div>
-    <div>自检信息</div><div><a href="health.json">health.json</a>（__BYTES__ 字节）</div>
+  <div class="quote" id="card">
+    <p id="quote">__QUOTE__</p>
+    <div class="from" id="from">__FROM__</div>
   </div>
+  <p class="hint" id="hint">本页每 60 秒从 v1.hitokoto.cn 现取一条</p>
 
-  <div class="cats">__CATS__</div>
+  <h2>磁贴地址</h2>
+  <table>
+    <tr><td>随机</td><td><code>__TILE__</code></td></tr>
+    <tr><td>生成时间</td><td>__TIME__</td></tr>
+    <tr><td>载荷</td><td>__BYTES__ 字节（上限 5 KB）</td></tr>
+    <tr><td>自检</td><td><a href="health.json">health.json</a></td></tr>
+  </table>
 
-  <p class="sub" style="margin-top:26px">
-    这一页每 60 秒从 <a href="https://v1.hitokoto.cn/">v1.hitokoto.cn</a> 现取一条，和磁贴无关；磁贴内容由 tile.xml 提供。
-  </p>
+  <h2>分类</h2>
+  <div class="chips">__CATS__</div>
+
+  <h2>安装应用</h2>
+  <ol>
+    <li>下载 <a href="https://github.com/bzhcyy/OneSentenceTile/releases">Release</a> 里的 <code>uwp-package.zip</code></li>
+    <li>解压后双击 <code>安装.cmd</code>（自动提权、装证书、装依赖、装主程序）</li>
+    <li>打开 App → 设置里开「动态磁贴」</li>
+  </ol>
+
+  <footer>
+    磁贴 XML 由 GitHub Actions 每 15 分钟生成一次；本页的一言是浏览器实时取的。
+    · <a href="https://github.com/bzhcyy/OneSentenceTile">源码</a>
+    · <a href="https://developer.hitokoto.cn/">一言 API</a>
+  </footer>
 </main>
+
 <script>
 (function () {
   var q = document.getElementById('quote');
   var f = document.getElementById('from');
+  var h = document.getElementById('hint');
   function pull() {
     fetch('https://v1.hitokoto.cn/', { cache: 'no-store' })
       .then(function (r) { return r.json(); })
@@ -265,8 +293,9 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
         var who = (d.from_who || '').trim();
         var src = (d.from || '').trim();
         f.textContent = src ? ('—— ' + (who ? who + '《' + src + '》' : '《' + src + '》')) : '';
+        h.textContent = '刚刚更新 · ' + new Date().toLocaleTimeString('zh-CN');
       })
-      .catch(function () { /* 取不到就保留服务端生成的那条 */ });
+      .catch(function () {});
   }
   pull();
   setInterval(pull, 60000);
