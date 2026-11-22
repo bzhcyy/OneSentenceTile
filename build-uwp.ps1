@@ -118,10 +118,16 @@ $manifestVersion = [regex]::Match($manifestText, 'Version="([\d.]+)"').Groups[1]
 Write-Host "清单版本: $manifestVersion（打包产物应是 OneSentenceTile_${manifestVersion}_*.appxbundle）"
 $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
 
+# PFX 带密码时 Get-PfxCertificate 会弹密码对话框；CI 里没有可交互桌面，会永久卡住。
+# 用 X509Certificate2 带密码构造，全程无对话框。
+function Read-PfxCert([string]$path) {
+    return New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($path, $CertificatePassword)
+}
+
 function Test-CertOk([string]$path) {
     if (-not (Test-Path $path)) { return $false }
     try {
-        $c = Get-PfxCertificate -FilePath $path
+        $c = Read-PfxCert $path
         if ($c.Subject -ne $publisher) { Write-Host "已有证书 Subject=$($c.Subject)，与清单 $publisher 不一致，重签"; return $false }
         if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有证书快过期，重签"; return $false }
         return $true
@@ -151,14 +157,9 @@ Write-Host "安装证书（受信任人）: Import-Certificate -FilePath '$cer' 
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
+Write-Host "准备 msbuild 参数…"
 $appxDir = Join-Path $repoRoot 'OneSentenceTile\AppPackages\'
 # MSBuild 命令行里的路径统一用正斜杠：反斜杠结尾会转义掉收尾引号，导致 /p 参数解析错乱
-$certThumbprint = ''
-if (Test-Path $pfx) {
-    try { $certThumbprint = (Get-PfxCertificate -FilePath $pfx).Thumbprint } catch { }
-}
-if (-not $certThumbprint) { Write-Warning '拿不到证书指纹，签名可能失败' }
-else { Write-Host "签名证书指纹: $certThumbprint" }
 $appxDirArg = ($appxDir -replace '\\', '/')
 $pfxArg = ($pfx -replace '\\', '/')
 $slnArg = ($sln -replace '\\', '/')
@@ -194,6 +195,7 @@ if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
     $msbuildArgs += '/p:UseDotNetNativeToolchain=false'
 }
 
+Write-Host "启动 msbuild…"
 Write-Host "命令行：msbuild $($msbuildArgs -join ' ')"
 $sw = [Diagnostics.Stopwatch]::StartNew()
 
