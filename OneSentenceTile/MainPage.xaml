@@ -35,6 +35,17 @@
                         <ComboBoxItem Content="24 小时" Tag="Daily"/>
                     </ComboBox>
 
+                    <StackPanel Orientation="Horizontal" Margin="8,2,8,6">
+                        <Button Name="refreshTileButton" Content="立即刷新磁贴" Click="refreshTileButton_Click"/>
+                        <TextBlock Name="tileStatusText"
+                                   Text=""
+                                   FontSize="12"
+                                   Foreground="#888"
+                                   Margin="10,0,0,0"
+                                   VerticalAlignment="Center"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+
                     <ToggleSwitch Name="isWorkerFirst"
                                   OffContent="磁贴源：Pages 优先"
                                   OnContent="磁贴源：Worker 优先"
@@ -100,15 +111,68 @@
                         <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
                     </ComboBox>
 
-                    <TextBlock Text="界面字体：" FontSize="14" Margin="12,4,0,0"/>
-                    <ComboBox Name="uiFontCombo" Margin="8,0,8,6" HorizontalAlignment="Stretch" SelectionChanged="uiFontCombo_SelectionChanged">
+                    <TextBlock Text="界面文字" FontSize="16" FontWeight="SemiBold" Foreground="#666" Margin="12,10,0,0"/>
+
+                    <TextBlock Text="字体：" FontSize="14" Margin="12,2,0,0"/>
+                    <ComboBox Name="uiFontCombo" Margin="8,0,8,4" HorizontalAlignment="Stretch" SelectionChanged="uiFontCombo_SelectionChanged">
                         <ComboBoxItem Content="系统默认" Tag=""/>
                         <ComboBoxItem Content="微软雅黑" Tag="Microsoft YaHei UI"/>
                         <ComboBoxItem Content="等线" Tag="DengXian"/>
                         <ComboBoxItem Content="宋体" Tag="SimSun"/>
                         <ComboBoxItem Content="楷体" Tag="KaiTi"/>
+                        <ComboBoxItem Content="黑体" Tag="SimHei"/>
                         <ComboBoxItem Content="Consolas" Tag="Consolas"/>
+                        <ComboBoxItem Content="自定义（在下面输入）" Tag="custom"/>
                     </ComboBox>
+                    <Grid Margin="8,0,8,6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox Name="customFontBox" PlaceholderText="字体名，如 思源黑体 / 华文楷体" FontSize="13"/>
+                        <Button Grid.Column="1" Content="应用" Margin="6,0,0,0" Click="applyCustomFontButton_Click"/>
+                    </Grid>
+
+                    <TextBlock Text="标题字号 / 粗细：" FontSize="14" Margin="12,2,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,8,4">
+                        <ComboBox Name="uiTitleSizeCombo" Width="120" SelectionChanged="uiTitleSizeCombo_SelectionChanged">
+                            <ComboBoxItem Content="20" Tag="20"/>
+                            <ComboBoxItem Content="24" Tag="24"/>
+                            <ComboBoxItem Content="28" Tag="28"/>
+                            <ComboBoxItem Content="30" Tag="30"/>
+                            <ComboBoxItem Content="34" Tag="34"/>
+                            <ComboBoxItem Content="40" Tag="40"/>
+                            <ComboBoxItem Content="46" Tag="46"/>
+                        </ComboBox>
+                        <ToggleSwitch Name="uiTitleBold" Margin="12,0,0,0" OnContent="加粗" OffContent="常规" Toggled="uiTitleBold_Toggled"/>
+                    </StackPanel>
+
+                    <TextBlock Text="正文字号 / 粗细：" FontSize="14" Margin="12,2,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,8,4">
+                        <ComboBox Name="uiQuoteSizeCombo" Width="120" SelectionChanged="uiQuoteSizeCombo_SelectionChanged">
+                            <ComboBoxItem Content="16" Tag="16"/>
+                            <ComboBoxItem Content="20" Tag="20"/>
+                            <ComboBoxItem Content="24" Tag="24"/>
+                            <ComboBoxItem Content="28" Tag="28"/>
+                            <ComboBoxItem Content="32" Tag="32"/>
+                            <ComboBoxItem Content="36" Tag="36"/>
+                            <ComboBoxItem Content="42" Tag="42"/>
+                        </ComboBox>
+                        <ToggleSwitch Name="uiQuoteBold" Margin="12,0,0,0" OnContent="加粗" OffContent="常规" Toggled="uiQuoteBold_Toggled"/>
+                    </StackPanel>
+
+                    <TextBlock Text="出处字号 / 粗细：" FontSize="14" Margin="12,2,0,0"/>
+                    <StackPanel Orientation="Horizontal" Margin="8,0,8,6">
+                        <ComboBox Name="uiFromSizeCombo" Width="120" SelectionChanged="uiFromSizeCombo_SelectionChanged">
+                            <ComboBoxItem Content="12" Tag="12"/>
+                            <ComboBoxItem Content="14" Tag="14"/>
+                            <ComboBoxItem Content="16" Tag="16"/>
+                            <ComboBoxItem Content="18" Tag="18"/>
+                            <ComboBoxItem Content="20" Tag="20"/>
+                            <ComboBoxItem Content="24" Tag="24"/>
+                        </ComboBox>
+                        <ToggleSwitch Name="uiFromBold" Margin="12,0,0,0" OnContent="加粗" OffContent="常规" Toggled="uiFromBold_Toggled"/>
+                    </StackPanel>
 
                     <!-- 窗口 -->
                     <TextBlock Text="窗口" FontSize="16" FontWeight="SemiBold" Foreground="#666" Margin="12,10,0,0"/>

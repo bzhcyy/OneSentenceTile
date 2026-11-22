@@ -6,6 +6,7 @@ using Windows.Storage;
 using Windows.Storage.AccessCache;
 using Windows.Storage.Pickers;
 using Windows.UI;
+using Windows.UI.Text;
 using Windows.UI.Notifications;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -65,12 +66,20 @@ namespace OneSentenceTile
             SelectComboByTag(tileQuoteStyleCombo, TileSource.StyleQuote);
             SelectComboByTag(tileAttrStyleCombo, TileSource.StyleAttr);
             SelectComboByTag(uiFontCombo, GetString("uiFont", ""));
+            customFontBox.Text = GetString("uiFontCustom", "");
+            SelectComboByTag(uiTitleSizeCombo, GetString("uiTitleSize", "30"));
+            SelectComboByTag(uiQuoteSizeCombo, GetString("uiQuoteSize", "36"));
+            SelectComboByTag(uiFromSizeCombo, GetString("uiFromSize", "18"));
+            uiTitleBold.IsOn = GetBool("uiTitleBold", true);
+            uiQuoteBold.IsOn = GetBool("uiQuoteBold", true);
+            uiFromBold.IsOn = GetBool("uiFromBold", false);
             wallpaperUrlBox.Text = GetString("wallUrl", "");
             _loading = false;
 
             SetBcakGroundColor();
             SetForeColor();
             ApplyUiFont();
+            ApplyUiTextStyles();
             ApplyTitleBarTheme();
             await ApplyWallpaperAsync();
             await LoadDailyQuoteAsync();
@@ -151,23 +160,60 @@ namespace OneSentenceTile
             if (!isTileFresh.IsOn)
             {
                 try { updater.StopPeriodicUpdate(); } catch { }
+                SetTileStatus("磁贴已关闭");
                 return;
             }
 
+            SetTileStatus("正在连接磁贴服务器…");
             var uri = await TileSource.ResolveAsync();
+            var host = uri.Host;
+
             if (TileIntervalTag == "Realtime")
             {
                 try { updater.StopPeriodicUpdate(); } catch { }
-                await PushTileNowAsync(uri);
+                var ok = await PushTileNowAsync(uri);
+                SetTileStatus(ok ? "已刷新（" + host + "）" : "刷新失败：连不上 " + host);
             }
             else
             {
-                updater.StartPeriodicUpdate(uri, ParseInterval(TileIntervalTag));
+                try
+                {
+                    updater.StartPeriodicUpdate(uri, ParseInterval(TileIntervalTag));
+                    SetTileStatus("已设为每 " + IntervalLabel(TileIntervalTag) + " 刷新（" + host + "）");
+                }
+                catch (Exception ex)
+                {
+                    SetTileStatus("设置失败：" + ex.Message);
+                }
             }
         }
 
+        private void SetTileStatus(string text)
+        {
+            tileStatusText.Text = text ?? "";
+        }
+
+        private static string IntervalLabel(string tag)
+        {
+            switch (tag)
+            {
+                case "HalfHour": return "30 分钟";
+                case "Hour": return "1 小时";
+                case "SixHours": return "6 小时";
+                case "TwelveHours": return "12 小时";
+                case "Daily": return "24 小时";
+                default: return "实时";
+            }
+        }
+
+        private async void refreshTileButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetTileStatus("正在刷新…");
+            await ApplyTileAsync();
+        }
+
         /// <summary>立刻下载磁贴 XML 并作为本地通知推上去（实时刷新用）。</summary>
-        private async Task PushTileNowAsync(Uri uri)
+        private async Task<bool> PushTileNowAsync(Uri uri)
         {
             try
             {
@@ -179,8 +225,12 @@ namespace OneSentenceTile
                     doc.LoadXml(xml);
                     TileUpdateManager.CreateTileUpdaterForApplication().Update(new TileNotification(doc));
                 }
+                return true;
             }
-            catch { }
+            catch
+            {
+                return false;
+            }
         }
 
         private async void isTileFresh_Toggled(object sender, RoutedEventArgs e)
@@ -292,14 +342,88 @@ namespace OneSentenceTile
         /// <summary>界面字体（磁贴字体由 Windows 决定，不支持自定义）。</summary>
         private void ApplyUiFont()
         {
-            var name = GetString("uiFont", "");
-            var family = string.IsNullOrWhiteSpace(name) ? null : new FontFamily(name);
-            if (family != null)
+            var tag = GetString("uiFont", "");
+            string name = tag;
+            if (tag == "custom") name = GetString("uiFontCustom", "");
+            if (string.IsNullOrWhiteSpace(name))
             {
-                dailyQuoteText.FontFamily = family;
-                dailyQuoteFrom.FontFamily = family;
-                headerText.FontFamily = family;
+                headerText.ClearValue(TextBlock.FontFamilyProperty);
+                dailyQuoteText.ClearValue(TextBlock.FontFamilyProperty);
+                dailyQuoteFrom.ClearValue(TextBlock.FontFamilyProperty);
+                return;
             }
+            var family = new FontFamily(name);
+            headerText.FontFamily = family;
+            dailyQuoteText.FontFamily = family;
+            dailyQuoteFrom.FontFamily = family;
+        }
+
+        /// <summary>界面三段文字的字号 / 粗细。</summary>
+        private void ApplyUiTextStyles()
+        {
+            headerText.FontSize = ParseDouble(GetString("uiTitleSize", "30"), 30);
+            dailyQuoteText.FontSize = ParseDouble(GetString("uiQuoteSize", "36"), 36);
+            dailyQuoteFrom.FontSize = ParseDouble(GetString("uiFromSize", "18"), 18);
+
+            headerText.FontWeight = GetBool("uiTitleBold", true) ? FontWeights.Bold : FontWeights.Normal;
+            dailyQuoteText.FontWeight = GetBool("uiQuoteBold", true) ? FontWeights.Bold : FontWeights.Normal;
+            dailyQuoteFrom.FontWeight = GetBool("uiFromBold", false) ? FontWeights.Bold : FontWeights.Normal;
+        }
+
+        private static double ParseDouble(string text, double fallback)
+        {
+            double v;
+            return double.TryParse(text, out v) && v > 0 ? v : fallback;
+        }
+
+        private void uiTitleSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = uiTitleSizeCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            SetString("uiTitleSize", (string)item.Tag);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void uiQuoteSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = uiQuoteSizeCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            SetString("uiQuoteSize", (string)item.Tag);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void uiFromSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = uiFromSizeCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            SetString("uiFromSize", (string)item.Tag);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void uiTitleBold_Toggled(object sender, RoutedEventArgs e)
+        {
+            SetBool("uiTitleBold", uiTitleBold.IsOn);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void uiQuoteBold_Toggled(object sender, RoutedEventArgs e)
+        {
+            SetBool("uiQuoteBold", uiQuoteBold.IsOn);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void uiFromBold_Toggled(object sender, RoutedEventArgs e)
+        {
+            SetBool("uiFromBold", uiFromBold.IsOn);
+            if (!_loading) ApplyUiTextStyles();
+        }
+
+        private void applyCustomFontButton_Click(object sender, RoutedEventArgs e)
+        {
+            SetString("uiFontCustom", (customFontBox.Text ?? "").Trim());
+            SetString("uiFont", "custom");
+            SelectComboByTag(uiFontCombo, "custom");
+            ApplyUiFont();
         }
 
         /// <summary>右上角标题栏按钮跟随主题：有壁纸时用白字，否则黑字。</summary>

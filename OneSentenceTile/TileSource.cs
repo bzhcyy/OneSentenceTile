@@ -100,7 +100,7 @@ namespace OneSentenceTile
             {
                 using (var http = new HttpClient())
                 {
-                    http.Timeout = TimeSpan.FromSeconds(4);
+                    http.Timeout = TimeSpan.FromSeconds(2.5);
                     var text = await http.GetStringAsync(url);
                     return text != null && text.IndexOf("<tile", StringComparison.OrdinalIgnoreCase) >= 0;
                 }
