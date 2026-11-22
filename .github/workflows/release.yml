@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/cert
-          key: uwp-dev-cert-v2
+          key: uwp-dev-cert-v5
 
       - name: 打包
         shell: powershell

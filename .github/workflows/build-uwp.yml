@@ -76,7 +76,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/cert
-          key: uwp-dev-cert-v2
+          key: uwp-dev-cert-v5
 
       - name: 使用固定证书（可选，来自 Secrets）
         shell: pwsh
