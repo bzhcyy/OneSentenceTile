@@ -98,47 +98,67 @@ if ($ForceMobileSdk) { $includeMobile = $true }
 Write-Host ("Windows Mobile Extensions: " + $(if ($mobileFound) { '已安装' } else { '未安装' }) + "；本次 IncludeMobileSdk=$($includeMobile.ToString().ToLower())")
 if ($includeMobile -and -not $mobileFound) { Write-Warning '强制引用 Windows Mobile 扩展，但它没装，编译大概率报 SDKReference 找不到。' }
 
-# ---------- 4. 证书 ----------
+# ---------- 4. 证书（自签根 CA + 由根签发的代码签名证书）----------
+# 为什么要两层：
+#   直接用自签证书签名，每次换证书都要用户重新“信任”一次；
+#   改成“根 CA（装一次，放进受信任的根证书颁发机构）+ 叶证书（签发，可以换）”，
+#   以后换叶证书，用户机器上已经信任的根仍然有效，更新就不用再装证书了。
 Step '准备签名证书'
 $certDir = Join-Path $logDir 'cert'
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
+
+$rootSubject = 'CN=KienSticn Root CA'
+$rootPfx = Join-Path $certDir 'KienSticnRootCA.pfx'
+$rootCer = Join-Path $certDir 'KienSticnRootCA.cer'
 $pfx = Join-Path $certDir 'OneSentenceTile.pfx'
 $cer = Join-Path $certDir 'OneSentenceTile.cer'
 
-# 清单里的 Subject（改过 Publisher 就得换证书，否则签名报 APPX0108）
 $publisher = [regex]::Match((Get-Content $manifest -Raw), 'Publisher="([^"]+)"').Groups[1].Value
 if (-not $publisher) { throw '清单里没读到 Publisher' }
+
+$secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
+
+# 根 CA：没有就生成，有就复用（根私钥千万别丢，丢了就得重新让所有人信任新根）
+if (-not (Test-Path $rootPfx)) {
+    Write-Host "生成根证书：$rootSubject（10 年）"
+    $root = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
+        -KeyUsage CertSign, CRLSign, DigitalSignature -KeyExportPolicy Exportable `
+        -FriendlyName 'KienSticn Root CA' -CertStoreLocation 'Cert:\CurrentUser\My' `
+        -TextExtension @('2.5.29.19={text}ca=1&pathlength=1') -NotAfter (Get-Date).AddYears(10)
+    Export-PfxCertificate -Cert $root -FilePath $rootPfx -Password $secure | Out-Null
+    Export-Certificate -Cert $root -FilePath $rootCer | Out-Null
+}
+$rootCert = Import-PfxCertificate -FilePath $rootPfx -Password $secure -CertStoreLocation 'Cert:\CurrentUser\My'
+
+function Test-LeafOk([string]$path) {
+    if (-not (Test-Path $path)) { return $false }
+    try {
+        $c = Get-PfxCertificate -FilePath $path
+        if ($c.Subject -ne $publisher) { Write-Host "已有叶证书 Subject=$($c.Subject)，与清单 $publisher 不一致，重签"; return $false }
+        if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有叶证书快过期，重签"; return $false }
+        return $true
+    }
+    catch { return $false }
+}
 
 if ($CertificatePath) {
     if (-not (Test-Path $CertificatePath)) { throw "指定的证书不存在：$CertificatePath" }
     $pfx = (Resolve-Path $CertificatePath).Path
     Write-Host "使用指定证书: $pfx"
 }
-elseif (Test-Path $pfx) {
-    # 旧证书的 Subject 可能和清单对不上（比如 Publisher 改过），对不上就重签
-    $subjectOk = $false
-    try {
-        $existing = Get-PfxCertificate -FilePath $pfx
-        $subjectOk = ($existing.Subject -eq $publisher)
-        Write-Host ("已有证书 Subject=" + $existing.Subject + "（清单要求 " + $publisher + "）")
-    }
-    catch { Write-Warning "读取已有证书失败，将重新生成" }
-    if (-not $subjectOk) {
-        Write-Warning "证书与清单 Publisher 不一致，删掉重建"
-        Remove-Item $pfx -Force -ErrorAction SilentlyContinue
-        Remove-Item $cer -Force -ErrorAction SilentlyContinue
-    }
+elseif (Test-LeafOk $pfx) {
+    Write-Host "复用已有叶证书: $pfx"
 }
-if (-not (Test-Path $pfx)) {
-    Write-Host "生成自签证书，Subject=$publisher"
-    $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
-    $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
-        -FriendlyName 'OneSentenceTile dev' -CertStoreLocation 'Cert:\CurrentUser\My' `
-        -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}') -NotAfter (Get-Date).AddYears(5)
-    Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
-    Export-Certificate -Cert $cert -FilePath $cer | Out-Null
+else {
+    Write-Host "用根证书签发叶证书：$publisher（3 年）"
+    $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -Signer $rootCert `
+        -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
+    Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $secure -ChainOption BuildChain | Out-Null
+    Export-Certificate -Cert $leaf -FilePath $cer | Out-Null
     Write-Host "已生成: $pfx / $cer"
 }
+
+Write-Host "根证书（只需要装一次）: $rootCer"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"

@@ -48,8 +48,20 @@
                                           OffContent="动态磁贴：关"
                                           OnContent="动态磁贴：开"
                                           Margin="0,-2"
-                                          Toggled="isTileFresh_Toggled"/>                    <Button Name="refreshTileButton" Content="立即刷新磁贴" Margin="0,6,0,0" Click="refreshTileButton_Click"/>
+                                          Toggled="isTileFresh_Toggled"/>
 
+                            <TextBlock Text="刷新间隔" Style="{StaticResource Label}"/>
+                            <ComboBox Name="tileIntervalCombo" Style="{StaticResource Combo}"
+                                      SelectionChanged="tileIntervalCombo_SelectionChanged">
+                                <ComboBoxItem Content="实时（打开就刷新）" Tag="Realtime"/>
+                                <ComboBoxItem Content="30 分钟" Tag="HalfHour"/>
+                                <ComboBoxItem Content="1 小时" Tag="Hour"/>
+                                <ComboBoxItem Content="6 小时" Tag="SixHours"/>
+                                <ComboBoxItem Content="12 小时" Tag="TwelveHours"/>
+                                <ComboBoxItem Content="24 小时" Tag="Daily"/>
+                            </ComboBox>
+
+                            <Button Name="refreshTileButton" Content="立即刷新磁贴" Margin="0,6,0,0" Click="refreshTileButton_Click"/>
                             <ToggleSwitch Name="isWorkerFirst"
                                           OffContent="磁贴源：Pages 优先"
                                           OnContent="磁贴源：Worker 优先"

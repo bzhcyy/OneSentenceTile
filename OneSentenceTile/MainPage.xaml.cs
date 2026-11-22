@@ -46,6 +46,14 @@ namespace OneSentenceTile
             }
             catch { }
 
+            // 一次性迁移：对齐默认值从「居中」改成「标题靠左 / 出处靠右」
+            if (GetString("settingsRev", "") != "2")
+            {
+                SetString("tileTitleAlign", "left");
+                SetString("tileAttrAlign", "right");
+                SetString("settingsRev", "2");
+            }
+
             FillTileStyleCombos();
             FillUiSizeCombos();
 
@@ -71,6 +79,7 @@ namespace OneSentenceTile
             tileShowAttrSwitch.IsOn = TileSource.ShowAttr;
             SelectComboByTag(tileTitleAlignCombo, TileSource.TitleAlign);
             SelectComboByTag(tileAttrAlignCombo, TileSource.AttrAlign);
+            SelectComboByTag(tileIntervalCombo, TileIntervalTag);
             SelectComboByTag(uiFontCombo, GetString("uiFont", ""));
             customFontBox.Text = GetString("uiFontCustom", "");
             SelectComboByTag(uiTitleSizeCombo, GetString("uiTitleSize", "60"));
@@ -142,19 +151,70 @@ namespace OneSentenceTile
         // ------------------------------------------------------------ 磁贴
 
 
-        /// <summary>磁贴始终「实时」：App 现拉一次 XML 立刻推给磁贴（Pages / Worker 都一样）。</summary>
+        /// <summary>刷新间隔：Realtime = App 现拉现推；其余走系统周期更新。</summary>
+        private string TileIntervalTag
+        {
+            get { return GetString("tileInterval", "Realtime"); }
+            set { SetString("tileInterval", value); }
+        }
+
+        private static readonly Dictionary<string, PeriodicUpdateRecurrence> IntervalMap =
+            new Dictionary<string, PeriodicUpdateRecurrence>
+            {
+                { "HalfHour", PeriodicUpdateRecurrence.HalfHour },
+                { "Hour", PeriodicUpdateRecurrence.Hour },
+                { "SixHours", PeriodicUpdateRecurrence.SixHours },
+                { "TwelveHours", PeriodicUpdateRecurrence.TwelveHours },
+                { "Daily", PeriodicUpdateRecurrence.Daily }
+            };
+
+        private static string IntervalLabel(string tag)
+        {
+            switch (tag)
+            {
+                case "HalfHour": return "30 分钟";
+                case "Hour": return "1 小时";
+                case "SixHours": return "6 小时";
+                case "TwelveHours": return "12 小时";
+                case "Daily": return "24 小时";
+                default: return "实时";
+            }
+        }
+
         private async Task ApplyTileAsync()
         {
+            var updater = TileUpdateManager.CreateTileUpdaterForApplication();
             if (!isTileFresh.IsOn)
             {
-                try { TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate(); } catch { }
+                try { updater.StopPeriodicUpdate(); } catch { }
                 return;
             }
 
-            var uri = await TileSource.ResolveContentAsync();
-            try { TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate(); } catch { }
-            await PushTileNowAsync(uri);
-            UpdateAlignAvailability(uri);
+            try { updater.StopPeriodicUpdate(); } catch { }
+
+            if (TileIntervalTag == "Realtime")
+            {
+                // 实时：App 现拉 XML，按设置重建排版后立刻推给磁贴
+                var contentUri = await TileSource.ResolveContentAsync();
+                await PushTileNowAsync(contentUri);
+                UpdateAlignAvailability(contentUri);
+            }
+            else
+            {
+                // 定时：交给系统按周期去拉（排版用服务端的默认值）
+                var uri = await TileSource.ResolveAsync();
+                PeriodicUpdateRecurrence recurrence;
+                if (!IntervalMap.TryGetValue(TileIntervalTag, out recurrence))
+                {
+                    recurrence = PeriodicUpdateRecurrence.HalfHour;
+                }
+                try
+                {
+                    updater.StartPeriodicUpdate(uri, recurrence);
+                }
+                catch { }
+                UpdateAlignAvailability(uri);
+            }
         }
 
         /// <summary>Pages 是静态文件，改不了标题/出处的对齐，所以用 Pages 时把两个下拉禁用。</summary>
@@ -279,6 +339,15 @@ namespace OneSentenceTile
 
         private async void refreshTileButton_Click(object sender, RoutedEventArgs e)
         {
+            await ApplyTileAsync();
+        }
+
+        private async void tileIntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileIntervalCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileIntervalTag = (string)item.Tag;
+            if (_loading) return;
             await ApplyTileAsync();
         }
 
@@ -751,6 +820,8 @@ namespace OneSentenceTile
                 }
             }
             catch { }
+
+            SetBcakGroundColor();   // 全屏 / 非全屏的亚克力表现不同，切换时重刷
             if (!_loading) SetBool("fullscreen", isfullScreen.IsOn);
         }
 
@@ -833,25 +904,30 @@ namespace OneSentenceTile
         {
             try
             {
-                var color = Color.FromArgb(255,
-                    (byte)BackGroundColorRedSlider.Value,
-                    (byte)BackGroundColorGreenSlider.Value,
-                    (byte)BackGroundColorBlueSlider.Value);
+                var r = (byte)BackGroundColorRedSlider.Value;
+                var g = (byte)BackGroundColorGreenSlider.Value;
+                var b = (byte)BackGroundColorBlueSlider.Value;
+                var transparency = BackGroundAcrylicBlueSlider.Value / 100.0;          // 1 = 全透明
+                var alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(255 * (1 - transparency))));
 
-                if (Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase"))
+                // 全屏时窗口没有桌面背景，HostBackdrop 亚克力不会显示，
+                // 改用带 alpha 的纯色，滑块才有可见效果。
+                var fullscreen = false;
+                try { fullscreen = isfullScreen.IsOn; } catch { }
+
+                if (!fullscreen && Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase"))
                 {
-                    var brush = new AcrylicBrush
+                    mainGrid.Background = new AcrylicBrush
                     {
                         BackgroundSource = AcrylicBackgroundSource.HostBackdrop,
-                        TintColor = color,
-                        FallbackColor = color,
-                        TintOpacity = 1 - BackGroundAcrylicBlueSlider.Value / 100
+                        TintColor = Color.FromArgb(255, r, g, b),
+                        FallbackColor = Color.FromArgb(alpha, r, g, b),
+                        TintOpacity = transparency
                     };
-                    mainGrid.Background = brush;
                 }
                 else
                 {
-                    mainGrid.Background = new SolidColorBrush(color);
+                    mainGrid.Background = new SolidColorBrush(Color.FromArgb(alpha, r, g, b));
                 }
             }
             catch { }

@@ -32,7 +32,7 @@
 | | |
 |---|---|
 | 🗂 **13 种分类** | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 来自网络 / 其他 / 影视 / 诗词 / 网易云 / 哲学 / 抖机灵 |
-| ⏱ **刷新间隔** | 实时（点一下就换）/ 30 分钟 / 1 / 6 / 12 / 24 小时 |
+| ⏱ **刷新间隔** | 实时（App 现拉现推，排版跟着设置走）/ 30 分钟 / 1 / 6 / 12 / 24 小时（定时交给系统，排版用服务端默认） |
 | 🔀 **双服务器** | Worker 优先，连不上自动退回 GitHub Pages；也能手动指定优先谁 |
 | 🖼 **壁纸** | 关闭 / 本地图片 / 网络地址 / 文件夹轮播（1–60 分钟可调） |
 | 🔠 **磁贴文字** | 标题 / 正文 / 出处 三段各自选字号档位（12/15/20/24/34/46，含淡色版），即时生效 |
@@ -92,7 +92,23 @@ git tag v1.3.0 && git push origin v1.3.0
 powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release -NoDotNetNative
 ```
 
-签名证书按清单里的 `Publisher`（`CN=KienSticn`）自动生成；换了 Publisher 脚本会自动重签。
+### 签名证书（装一次，以后更新不用再装）
+
+`build-uwp.ps1` 用的是「自签根 CA + 由根签发的代码签名证书」两层结构：
+
+| 文件 | 用途 |
+|---|---|
+| `KienSticnRootCA.cer` | **只需要装一次**，装进「受信任的根证书颁发机构」 |
+| `OneSentenceTile_<版本>_x64.cer` | 叶证书，跟着安装包走；换了也仍然链到同一个根 |
+
+所以以后出新版本（重新签发叶证书），你机器上信任的根不变，**不用再手动装证书**。
+根私钥缓存在 Actions 的 `build/cert` 里（`uwp-dev-cert-v2`），千万别清这个缓存——
+清了就等于换了根，所有人都得重新信任一次。
+
+```powershell
+# 管理员 PowerShell，只需执行一次
+Import-Certificate -FilePath .\KienSticnRootCA.cer -CertStoreLocation Cert:\LocalMachine\Root
+```
 
 ## 安装
 
