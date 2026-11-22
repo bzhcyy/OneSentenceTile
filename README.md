@@ -1,129 +1,108 @@
 # 一言 Tile
 
-> Windows 10 / 11 的桌面磁贴，每小时给你一句「一言」。
-> 数据来自 [hitokoto.cn](https://hitokoto.cn)，服务器托管在 Cloudflare Worker 与 GitHub Pages。
+Windows 10 / 11 桌面磁贴，每小时给你一句「一言」。
 
 <p align="center">
-  <a href="https://bzhcyy.github.io/OneSentenceTile/"><b>🌐 磁贴服务器</b></a> ·
-  <a href="https://github.com/bzhcyy/OneSentenceTile/releases">📦 Releases</a> ·
-  <a href="https://developer.hitokoto.cn/">📖 一言 API</a>
+  <a href="https://bzhcyy.github.io/OneSentenceTile/"><b>磁贴服务器</b></a> ·
+  <a href="https://github.com/bzhcyy/OneSentenceTile/releases">Releases</a> ·
+  <a href="https://developer.hitokoto.cn/">一言 API</a>
 </p>
 
 ---
 
-## 它长什么样
-
-磁贴（大尺寸）：
+## 磁贴效果
 
 ```
 每日一言
-　　先别说话，再别康桥。
-　　　　　　—— 无名氏《弱智吧》
+　　没有谈判，硝烟中，炮火轰鸣中，世界褪去了色彩。
+　　　　　　　　　　　　—— 郑芳浩《止战之殇》
 ```
 
-- 默认：标题 **每日一言** 34px 粗体靠左，正文 20px 首行空两格，出处 15px 靠右
-- 磁贴完全透明，壁纸由系统磨砂透出；也可以关掉图标、只留文字
-- 每秒都在变的只有你的心情，文案每小时更新一条
-
-主界面：中间大字显示当前这条一言，左上角齿轮进设置。
+默认排版：标题 24 居左、正文 15 空两格、出处 12 靠右。全部可在设置里改。
 
 ## 功能
 
 | | |
 |---|---|
-| 🗂 **13 种分类** | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 来自网络 / 其他 / 影视 / 诗词 / 网易云 / 哲学 / 抖机灵 |
-| ⏱ **刷新间隔** | 实时（现拉现推）/ 30 分钟 / 1 / 6 / 12 / 24 小时——定时模式下 App 运行时会按同间隔自己刷新（保留自定义排版），关闭后由系统周期更新兜底 |
-| 🔀 **双服务器** | Worker 优先，连不上自动退回 GitHub Pages；也能手动指定优先谁 |
-| 🖼 **壁纸** | 关闭 / 本地图片 / 网络地址 / 文件夹轮播（1–60 分钟可调） |
-| 🔠 **磁贴文字** | 标题 / 正文 / 出处 三段各自选字号档位（12/15/20/24/34/46，含淡色版），即时生效 |
-| 🖋 **界面字体** | 系统默认 / 微软雅黑 / 等线 / 宋体 / 楷体 / Consolas |
-| 🎨 **外观** | 背景色 + 亚克力透明度、字体颜色、全屏、屏幕常亮；右上角标题栏按钮跟随主题（有壁纸用白、无壁纸用黑） |
-| 🧩 **系统集成** | 语音指令「一秒」打开设置 |
+| **分类** | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 网络 / 其他 / 影视 / 诗词 / 网易云 / 哲学 / 抖机灵 |
+| **刷新间隔** | 实时（现拉现推）/ 30 分钟 / 1 / 6 / 12 / 24 小时 |
+| **双源** | Worker 优先，失败自动退 Pages |
+| **磁贴文字** | 标题 / 正文 / 出处 各自字号、对齐、显示开关 |
+| **界面文字** | 字体（含系统字体选择框）、三段字号、加粗 |
+| **壁纸** | 关闭 / 本地图片 / 网络地址 / 文件夹轮播（1–60 分钟） |
+| **外观** | 背景色 + 亚克力透明度（全屏自动改用 alpha 纯色）、字体色、全屏、屏幕常亮 |
 
-> **关于磁贴字体**：Windows 磁贴 XML 只接受 `hint-style`（固定 7 档字号，粗细随档位变化），
-> **不能指定字体族和任意像素值**。所以「界面字体」只作用于 App 界面；磁贴的字号/粗细靠上面的
-> 三段档位来调，参数会拼进磁贴 URL（`?titleStyle=…&quoteStyle=…&attrStyle=…`），
-> Worker 会据此改 XML；如果退回 Pages 静态文件，则使用服务器默认样式。
+## 安装
+
+下载 `uwp-package.zip` 解压后：
+
+1. **双击 `安装.cmd`**（会自动请求管理员权限）
+2. 它依次完成：证书 → 受信任人、依赖框架、主程序包
+
+手动方式：
+
+```powershell
+# 管理员 PowerShell
+Import-Certificate -FilePath .\OneSentenceTile_TemporaryKey.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
+Add-AppxPackage -Path .\Dependencies\x64\Microsoft.NET.CoreRuntime.1.1.appx
+Add-AppxPackage -Path .\Dependencies\x64\Microsoft.VCLibs.x64.14.00.appx
+Add-AppxPackage -Path .\OneSentenceTile_*_x64.appxbundle -ForceUpdateFromAnyVersion
+```
+
+免证书方式（需先开「开发人员模式」）：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install-app.ps1 -Register
+```
+
+| 报错 | 原因 | 处理 |
+|---|---|---|
+| `0x80073CF3` 找不到框架 | 依赖没装 | 装 `Dependencies\<arch>\*.appx` |
+| 证书缺少基本约束扩展 | 装进了「受信任的根」 | 改装「受信任人」 |
+| `APPX0107` 签名无效 | 用的是 CA 证书 | 用 `-Type CodeSigningCert` 的证书 |
+
+## 构建
+
+推送到 `master` 触发 Actions → `Build UWP package` → 下载 `uwp-package`。
+
+打 Release：推 `v*` tag 自动编译并挂包。
+
+```bash
+git tag v1.3.31 && git push origin v1.3.31
+```
+
+本地构建需要 VS 2022 + UWP 工作负载：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release -NoDotNetNative
+```
+
+签名证书缓存在 Actions 的 `build/cert`（key `uwp-dev-cert-v9`），**缓存不清理证书就不会变**，升级安装不用重装证书。想长期固定，把 `signing-cert` 工件里的 `.pfx`/`.cer` 存好，或放进 Secrets（`SIGNING_PFX_BASE64`）。
 
 ## 目录
 
 ```
-OneSentenceTile/           UWP 应用（C#）
-  MainPage.xaml            主界面 + 设置面板
-  TileSource.cs            Worker / Pages 双源探测与分类切换
-  Package.appxmanifest     清单（Identity: KienSticn.OneSentenceTile）
-tile/                      磁贴静态站生成器（GitHub Pages 用）
-  gen_tile.py              取一言 → 生成 tile.xml + 13 个分类文件
-  config.json              标题/样式/字数上限
-.github/workflows/
-  build-uwp.yml            云端打包 UWP
-  tile-pages.yml           每小时生成并发布磁贴
-  release.yml              打 tag 自动出 Release
-build-uwp.ps1              本地/CI 打包脚本（自签证书 + SDK 自适应）
-push-to-github.ps1         无 Git 环境下一键同步到 GitHub
-set-tile-url.ps1           改磁贴服务器地址
+OneSentenceTile/        UWP 应用
+  MainPage.xaml(.cs)    主界面 + 设置面板
+  TileSource.cs         双源探测、样式参数
+  Package.appxmanifest  清单
+tile/                   磁贴静态站生成器
+  gen_tile.py           生成 tile.xml + 13 个分类
+  config.json           标题/样式/对齐默认值
+cloudflare-worker/      Cloudflare Worker 版磁贴
+.github/workflows/      构建、发布、磁贴生成
+build-uwp.ps1           打包脚本
+install-app.ps1         安装脚本
+安装.cmd                 一键安装（自动提权）
 ```
 
 ## 磁贴服务器
 
 | | 地址 | 说明 |
 |---|---|---|
-| 主 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取，缓存 1 小时；支持 `?type=d` |
-| 备 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | 每 15 分钟生成；分类各自一个文件 `tile-d.xml`；首页 JS 现取一言 |
-
-App 启动时真实 GET 一次优先源，4 秒超时，内容含 `<tile` 才算可用，否则换另一个。
-两个都不通时仍按优先源走，磁贴内容由清单里的默认地址兜底。
-
-Worker 源码见 `worker.js`（部署到 Cloudflare Workers，免费额度 10 万请求/天）。
-
-## 构建
-
-**云端（推荐）**：push 后 Actions → `Build UWP package` → 下载 `uwp-package` → 右键 `Add-AppDevPackage.ps1` 运行。
-
-**打 Release**：推一个 `v*` tag，`release.yml` 会自动编译并把 `.appxbundle` 挂到 Release 上：
-
-```bash
-git tag v1.3.0 && git push origin v1.3.0
-```
-
-**本地**：需要 VS 2022 + UWP 工作负载。
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release -NoDotNetNative
-```
-
-### 签名证书
-
-用一张自签的代码签名证书（`CN=KienSticn`），构建时缓存在 Actions 的 `build/cert` 里，
-**同一个缓存不清理，证书就不会变**，所以后续更新版本不用重新装证书。
-
-证书沿用 1.3.6 那次构建的同一张（缓存 key `uwp-dev-cert-v2`），所以从 1.3.6 升级到新版本**不需要重装证书**。首次安装时把它装进「受信任人」即可（管理员 PowerShell）：
-
-```powershell
-Import-Certificate -FilePath .\OneSentenceTile_1.3.14.0_x64.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
-```
-
-> 换缓存 key 或清空缓存会重新生成证书，那时需要再导入一次。
-> 证书有效期 5 年，剩不到 30 天会自动重签。
-
-## 安装
-
-一键（管理员 PowerShell，在解压后的目录里）：
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install-app.ps1
-```
-
-它会自动把证书导入「受信任人」再装包。手动安装见下。
-
-> ⚠️ 证书必须装在 **受信任人（Trusted People）**，不是「受信任的根证书颁发机构」。
-> 装到根会报「证书缺少基本约束扩展」。
-
-
-1. 卸载旧版（历史版本 Identity 是 `800948F61A16.1s`）
-2. 装新的 `OneSentenceTile_<版本>_x64.appxbundle`（首次需信任自签证书）
-3. 打开 App → 设置 → 打开「动态磁贴」
+| 主 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 现取现返回，缓存 1 小时，支持 `?type=d` |
+| 备 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | 每 15 分钟生成，分类为 `tile-d.xml`；首页 JS 实时取一言 |
 
 ## 许可
 
-GPL-3.0（继承自上游 [chenxuuu/add-one-second-UWP](https://github.com/chenxuuu/add-one-second-UWP)）。
+GPL-3.0，继承自 [chenxuuu/add-one-second-UWP](https://github.com/chenxuuu/add-one-second-UWP)。
