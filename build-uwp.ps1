@@ -99,22 +99,19 @@ if ($ForceMobileSdk) { $includeMobile = $true }
 Write-Host ("Windows Mobile Extensions: " + $(if ($mobileFound) { '已安装' } else { '未安装' }) + "；本次 IncludeMobileSdk=$($includeMobile.ToString().ToLower())")
 if ($includeMobile -and -not $mobileFound) { Write-Warning '强制引用 Windows Mobile 扩展，但它没装，编译大概率报 SDKReference 找不到。' }
 
-# ---------- 4. 证书（根 CA + 叶证书，唯一能同时满足签名和信任的结构）----------
-# 为什么必须两层（前几版反复踩坑的结论）：
-#   * 单张「非 CA」自签证书 → AppX 能签，但它是链的根，而根必须是 CA，
-#     安装时报「证书缺少基本约束扩展」。
-#   * 单张「CA=1」证书 → 能装进受信任的根，但 AppX 拒绝用 CA 证书签名（APPX0107）。
-#   * 根 CA（CA=1，只签发证书）+ 叶证书（非 CA，Code Signing EKU）→ 两个问题都没有。
-# 安装时：根 → 受信任的根（只需一次），叶 → 受信任人（或由 Add-AppDevPackage 自动装）。
+# ---------- 4. 证书（沿用 VS 的临时密钥做法：单张自签 Code Signing）----------
+# 与原项目 addOneSecond_TemporaryKey.pfx 同类：非 CA 的代码签名证书。
+#   * 非 CA + Code Signing EKU → AppX 可以签名（不会 APPX0107）
+#   * 安装时放进「受信任人」(TrustedPeople) → 不会触发「缺少基本约束扩展」
+# 注意：不要用 Add-AppDevPackage.ps1 装证书，它会把证书塞进「受信任的根」，
+# 非 CA 证书装根就会报错。用 安装.cmd / install-app.ps1（装到受信任人）。
 Step '准备签名证书'
 $certDir = Join-Path $logDir 'cert'
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
 
-$rootSubject = 'CN=OneSentenceTile Dev Root'
-$rootPfx = Join-Path $certDir 'OneSentenceTileRoot.pfx'
-$rootCer = Join-Path $certDir 'OneSentenceTileRoot.cer'
-$pfx = Join-Path $certDir 'OneSentenceTile.pfx'
-$cer = Join-Path $certDir 'OneSentenceTile.cer'
+# 文件名沿用 VS 临时密钥命名，方便以后替换
+$pfx = Join-Path $certDir 'OneSentenceTile_TemporaryKey.pfx'
+$cer = Join-Path $certDir 'OneSentenceTile_TemporaryKey.cer'
 
 $manifestText = Get-Content $manifest -Raw
 $publisher = [regex]::Match($manifestText, 'Publisher="([^"]+)"').Groups[1].Value
@@ -127,24 +124,12 @@ function Read-PfxCert([string]$path) {
     return New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($path, $CertificatePassword)
 }
 
-# --- 根 CA：CA=1，只用来签发叶证书；没有就生成（10 年）---
-if (-not (Test-Path $rootPfx)) {
-    Write-Host "生成根证书：$rootSubject（10 年）"
-    $rootCa = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
-        -KeyUsage CertSign, CRLSign -KeyExportPolicy Exportable `
-        -FriendlyName 'OneSentenceTile Dev Root' -CertStoreLocation 'Cert:\CurrentUser\My' `
-        -TextExtension @('2.5.29.19={text}ca=1&pathlength=0') -NotAfter (Get-Date).AddYears(10)
-    Export-PfxCertificate -Cert $rootCa -FilePath $rootPfx -Password $secure | Out-Null
-    Export-Certificate -Cert $rootCa -FilePath $rootCer | Out-Null
-}
-$rootCert = Import-PfxCertificate -FilePath $rootPfx -Password $secure -CertStoreLocation 'Cert:\CurrentUser\My'
-
-function Test-LeafOk([string]$path) {
+function Test-CertOk([string]$path) {
     if (-not (Test-Path $path)) { return $false }
     try {
         $c = Read-PfxCert $path
-        if ($c.Subject -ne $publisher) { Write-Host "已有叶证书 Subject=$($c.Subject)，与清单不一致，重签"; return $false }
-        if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有叶证书快过期，重签"; return $false }
+        if ($c.Subject -ne $publisher) { Write-Host "已有证书 Subject=$($c.Subject)，与清单不一致，重签"; return $false }
+        if ($c.NotAfter -lt (Get-Date).AddDays(30)) { Write-Host "已有证书快过期，重签"; return $false }
         return $true
     }
     catch { return $false }
@@ -155,21 +140,20 @@ if ($CertificatePath) {
     $pfx = (Resolve-Path $CertificatePath).Path
     Write-Host "使用指定证书: $pfx"
 }
-elseif (Test-LeafOk $pfx) {
-    Write-Host "复用已有叶证书: $pfx"
+elseif (Test-CertOk $pfx) {
+    Write-Host "复用已有证书: $pfx"
 }
 else {
-    Write-Host "用根证书签发叶证书：$publisher（3 年，非 CA + Code Signing）"
-    $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -Signer $rootCert `
-        -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
-    # 只把叶证书打进 pfx：带链会让 Signtool 看到两张证书而报 APPX1204
-    Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $secure -ChainOption EndEntityCertOnly | Out-Null
-    Export-Certificate -Cert $leaf -FilePath $cer | Out-Null
+    Write-Host "生成自签证书（VS 临时密钥同款）：Subject=$publisher（5 年）"
+    $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher `
+        -KeyExportPolicy Exportable -FriendlyName 'OneSentenceTile TemporaryKey' `
+        -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(5)
+    Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
+    Export-Certificate -Cert $cert -FilePath $cer | Out-Null
     Write-Host "已生成: $pfx / $cer"
 }
 
-Write-Host "根证书（装一次到受信任的根）: $rootCer"
-Write-Host "叶证书（自动装或被 Add-AppDevPackage 处理）: $cer"
+Write-Host "证书（装到「受信任人」，别装受信任的根）: $cer"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"

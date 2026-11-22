@@ -15,7 +15,6 @@
 [CmdletBinding()]
 param(
     [string]$Package,
-    [string]$RootCertificate,
     [string]$Certificate,
     [switch]$Register,
     [switch]$SkipCertificate
@@ -62,13 +61,8 @@ if ($Register) {
 }
 
 # ---------------- 证书模式 ----------------
-if (-not $RootCertificate) {
-    $f = Find-One 'OneSentenceTileRoot.cer'
-    if ($f) { $RootCertificate = $f.FullName }
-}
 if (-not $Certificate) {
     $f = Get-ChildItem -Path $here -Recurse -File -Filter '*.cer' -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -ne $RootCertificate } |
         Sort-Object Length -Descending | Select-Object -First 1
     if ($f) { $Certificate = $f.FullName }
 }
@@ -77,29 +71,20 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
     [Security.Principal.WindowsBuiltInRole]::Administrator)
 
 Write-Host "安装包 : $Package"
-Write-Host "根证书 : $RootCertificate"
-Write-Host "叶证书 : $Certificate"
+Write-Host "证书   : $Certificate"
 Write-Host "管理员 : $isAdmin"
 
-if (-not $SkipCertificate) {
-    if (-not $isAdmin) {
-        Write-Warning '装证书需要管理员权限。请双击「安装.cmd」，或右键 PowerShell → 以管理员身份运行。'
+if (-not $SkipCertificate -and $Certificate) {
+    # 关键：装「受信任人」，不是「受信任的根」。
+    # 这是自签代码签名证书的正确位置；装到根会报「证书缺少基本约束扩展」。
+    $store = if ($isAdmin) { 'Cert:\LocalMachine\TrustedPeople' } else { 'Cert:\CurrentUser\TrustedPeople' }
+    Write-Host "导入证书到 $store ..."
+    try {
+        Import-Certificate -FilePath $Certificate -CertStoreLocation $store | Out-Null
+        Write-Host '证书导入成功（受信任人）' -ForegroundColor Green
     }
-    else {
-        if ($RootCertificate) {
-            try {
-                Import-Certificate -FilePath $RootCertificate -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
-                Write-Host '根证书 → 受信任的根  OK' -ForegroundColor Green
-            }
-            catch { Write-Warning "根证书导入失败：$($_.Exception.Message)" }
-        }
-        if ($Certificate) {
-            try {
-                Import-Certificate -FilePath $Certificate -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
-                Write-Host '叶证书 → 受信任人  OK' -ForegroundColor Green
-            }
-            catch { Write-Warning "叶证书导入失败：$($_.Exception.Message)" }
-        }
+    catch {
+        Write-Warning "导入失败：$($_.Exception.Message)"
     }
 }
 
