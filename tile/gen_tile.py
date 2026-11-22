@@ -30,7 +30,7 @@ DEFAULTS = {
     "quotePrefix": "",
     "showAttribution": True,
     "attributionSep": " —— ",
-    "indent": "\u3000\u3000",
+    "indent": "",
     "hitokotoUrl": "https://v1.hitokoto.cn/",
     "types": ["", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
     "clipMedium": 40,
@@ -84,8 +84,14 @@ def esc(value):
 
 
 def clip(text, limit):
+    """按句末标点优先截断，避免折行把标点甩到行首。"""
     if not limit or len(text) <= limit:
         return text
+    head = text[:limit]
+    for stop in ("。", "！", "？", "；", "…", "，", "、"):
+        at = head.rfind(stop)
+        if at >= limit * 0.5:
+            return head[: at + 1]
     return text[: max(1, limit - 1)] + "…"
 
 
@@ -132,10 +138,12 @@ def build_xml(base_url, item, cfg, type_code=""):
     prefix = cfg.get("quotePrefix") or ""
     indent = cfg.get("indent") or ""
 
-    def text(style, body, limit=None, align=None):
+    def text(style, body, limit=None, align=None, max_lines=None):
         attrs = f' hint-style="{style}"'
         if align:
             attrs += f' hint-align="{align}"'
+        if max_lines:
+            attrs += f' hint-maxLines="{max_lines}"'
         value = esc(clip(body, limit) if limit else body)
         return f"<text{attrs} hint-wrap=\"true\">{value}</text>"
 
@@ -151,7 +159,7 @@ def build_xml(base_url, item, cfg, type_code=""):
         + text("baseSubtle", indent + prefix + item["text"], cfg["clipWide"]) \
         + (text("captionSubtle", attr, align=a_align) if show_attr else "")
     large = (text(cfg["titleStyle"], title, align=t_align) if show_title else "") \
-        + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipLarge"]) \
+        + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipLarge"], max_lines=5) \
         + (text(cfg["attrStyle"], attr, align=a_align) if show_attr else "")
 
     return (

@@ -48,24 +48,7 @@
                                           OffContent="动态磁贴：关"
                                           OnContent="动态磁贴：开"
                                           Margin="0,-2"
-                                          Toggled="isTileFresh_Toggled"/>
-
-                            <TextBlock Text="刷新间隔" Style="{StaticResource Label}"/>
-                            <ComboBox Name="tileIntervalCombo" Style="{StaticResource Combo}"
-                                      SelectionChanged="tileIntervalCombo_SelectionChanged">
-                                <ComboBoxItem Content="实时（立即刷新）" Tag="Realtime"/>
-                                <ComboBoxItem Content="30 分钟" Tag="HalfHour"/>
-                                <ComboBoxItem Content="1 小时" Tag="Hour"/>
-                                <ComboBoxItem Content="6 小时" Tag="SixHours"/>
-                                <ComboBoxItem Content="12 小时" Tag="TwelveHours"/>
-                                <ComboBoxItem Content="24 小时" Tag="Daily"/>
-                            </ComboBox>
-
-                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                <Button Name="refreshTileButton" Content="立即刷新" Click="refreshTileButton_Click"/>
-                                <TextBlock Name="tileStatusText" Text="" FontSize="12" Foreground="#8A8F98"
-                                           Margin="10,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap"/>
-                            </StackPanel>
+                                          Toggled="isTileFresh_Toggled"/>                    <Button Name="refreshTileButton" Content="立即刷新磁贴" Margin="0,6,0,0" Click="refreshTileButton_Click"/>
 
                             <ToggleSwitch Name="isWorkerFirst"
                                           OffContent="磁贴源：Pages 优先"
@@ -105,42 +88,15 @@
 
                             <TextBlock Text="标题字号" Style="{StaticResource Label}"/>
                             <ComboBox Name="tileTitleStyleCombo" Style="{StaticResource Combo}"
-                                      SelectionChanged="tileTitleStyleCombo_SelectionChanged">
-                                <ComboBoxItem Content="极小 12" Tag="caption"/>
-                                <ComboBoxItem Content="小 15" Tag="base"/>
-                                <ComboBoxItem Content="中 20" Tag="subtitle"/>
-                                <ComboBoxItem Content="大 24" Tag="title"/>
-                                <ComboBoxItem Content="特大 34" Tag="subheader"/>
-                                <ComboBoxItem Content="巨大 46" Tag="header"/>
-                                <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
-                                <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
-                            </ComboBox>
+                                      SelectionChanged="tileTitleStyleCombo_SelectionChanged"></ComboBox>
 
                             <TextBlock Text="正文字号" Style="{StaticResource Label}"/>
                             <ComboBox Name="tileQuoteStyleCombo" Style="{StaticResource Combo}"
-                                      SelectionChanged="tileQuoteStyleCombo_SelectionChanged">
-                                <ComboBoxItem Content="极小 12" Tag="caption"/>
-                                <ComboBoxItem Content="小 15" Tag="base"/>
-                                <ComboBoxItem Content="中 20" Tag="subtitle"/>
-                                <ComboBoxItem Content="大 24" Tag="title"/>
-                                <ComboBoxItem Content="特大 34" Tag="subheader"/>
-                                <ComboBoxItem Content="巨大 46" Tag="header"/>
-                                <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
-                                <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
-                            </ComboBox>
+                                      SelectionChanged="tileQuoteStyleCombo_SelectionChanged"></ComboBox>
 
                             <TextBlock Text="出处字号" Style="{StaticResource Label}"/>
                             <ComboBox Name="tileAttrStyleCombo" Style="{StaticResource Combo}"
-                                      SelectionChanged="tileAttrStyleCombo_SelectionChanged">
-                                <ComboBoxItem Content="极小 12" Tag="caption"/>
-                                <ComboBoxItem Content="小 15" Tag="base"/>
-                                <ComboBoxItem Content="中 20" Tag="subtitle"/>
-                                <ComboBoxItem Content="大 24" Tag="title"/>
-                                <ComboBoxItem Content="特大 34" Tag="subheader"/>
-                                <ComboBoxItem Content="巨大 46" Tag="header"/>
-                                <ComboBoxItem Content="小·淡 15" Tag="baseSubtle"/>
-                                <ComboBoxItem Content="极小·淡 12" Tag="captionSubtle"/>
-                            </ComboBox>
+                                      SelectionChanged="tileAttrStyleCombo_SelectionChanged"></ComboBox>
 
                             <TextBlock Text="对齐" Style="{StaticResource Label}"/>
                             <ComboBox Name="tileTitleAlignCombo" Style="{StaticResource Combo}"
@@ -183,47 +139,25 @@
                                 <TextBox Name="customFontBox" PlaceholderText="字体名，如 思源黑体" FontSize="13"/>
                                 <Button Grid.Column="1" Content="应用" Margin="6,0,0,0" Click="applyCustomFontButton_Click"/>
                             </Grid>
+                            <Button Name="pickFontButton" Content="从系统字体里选…" Margin="0,6,0,0" Click="pickFontButton_Click"/>
 
                             <TextBlock Text="标题字号 / 粗细" Style="{StaticResource Label}"/>
                             <StackPanel Orientation="Horizontal">
-                                <ComboBox Name="uiTitleSizeCombo" Width="110" SelectionChanged="uiTitleSizeCombo_SelectionChanged">
-                                    <ComboBoxItem Content="20" Tag="20"/>
-                                    <ComboBoxItem Content="24" Tag="24"/>
-                                    <ComboBoxItem Content="28" Tag="28"/>
-                                    <ComboBoxItem Content="30" Tag="30"/>
-                                    <ComboBoxItem Content="34" Tag="34"/>
-                                    <ComboBoxItem Content="40" Tag="40"/>
-                                    <ComboBoxItem Content="46" Tag="46"/>
-                                </ComboBox>
+                                <ComboBox Name="uiTitleSizeCombo" Width="110" SelectionChanged="uiTitleSizeCombo_SelectionChanged"></ComboBox>
                                 <ToggleSwitch Name="uiTitleBold" Margin="10,-2,0,0" OnContent="加粗" OffContent="常规"
                                               Toggled="uiTitleBold_Toggled"/>
                             </StackPanel>
 
                             <TextBlock Text="正文字号 / 粗细" Style="{StaticResource Label}"/>
                             <StackPanel Orientation="Horizontal">
-                                <ComboBox Name="uiQuoteSizeCombo" Width="110" SelectionChanged="uiQuoteSizeCombo_SelectionChanged">
-                                    <ComboBoxItem Content="16" Tag="16"/>
-                                    <ComboBoxItem Content="20" Tag="20"/>
-                                    <ComboBoxItem Content="24" Tag="24"/>
-                                    <ComboBoxItem Content="28" Tag="28"/>
-                                    <ComboBoxItem Content="32" Tag="32"/>
-                                    <ComboBoxItem Content="36" Tag="36"/>
-                                    <ComboBoxItem Content="42" Tag="42"/>
-                                </ComboBox>
+                                <ComboBox Name="uiQuoteSizeCombo" Width="110" SelectionChanged="uiQuoteSizeCombo_SelectionChanged"></ComboBox>
                                 <ToggleSwitch Name="uiQuoteBold" Margin="10,-2,0,0" OnContent="加粗" OffContent="常规"
                                               Toggled="uiQuoteBold_Toggled"/>
                             </StackPanel>
 
                             <TextBlock Text="出处字号 / 粗细" Style="{StaticResource Label}"/>
                             <StackPanel Orientation="Horizontal">
-                                <ComboBox Name="uiFromSizeCombo" Width="110" SelectionChanged="uiFromSizeCombo_SelectionChanged">
-                                    <ComboBoxItem Content="12" Tag="12"/>
-                                    <ComboBoxItem Content="14" Tag="14"/>
-                                    <ComboBoxItem Content="16" Tag="16"/>
-                                    <ComboBoxItem Content="18" Tag="18"/>
-                                    <ComboBoxItem Content="20" Tag="20"/>
-                                    <ComboBoxItem Content="24" Tag="24"/>
-                                </ComboBox>
+                                <ComboBox Name="uiFromSizeCombo" Width="110" SelectionChanged="uiFromSizeCombo_SelectionChanged"></ComboBox>
                                 <ToggleSwitch Name="uiFromBold" Margin="10,-2,0,0" OnContent="加粗" OffContent="常规"
                                               Toggled="uiFromBold_Toggled"/>
                             </StackPanel>

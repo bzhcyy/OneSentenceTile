@@ -46,6 +46,9 @@ namespace OneSentenceTile
             }
             catch { }
 
+            FillTileStyleCombos();
+            FillUiSizeCombos();
+
             _loading = true;
             isTileFresh.IsOn = GetBool("tileOn", false);
             isWorkerFirst.IsOn = TileSource.PreferWorker;
@@ -58,7 +61,6 @@ namespace OneSentenceTile
             FontColorRedSlider.Value = GetDouble("fgR", 0);
             FontColorGreenSlider.Value = GetDouble("fgG", 0);
             FontColorBlueSlider.Value = GetDouble("fgB", 0);
-            SelectComboByTag(tileIntervalCombo, TileIntervalTag);
             SelectComboByTag(hitokotoTypeCombo, TileSource.HitokotoType);
             SelectComboByTag(wallpaperModeCombo, WallpaperMode);
             SelectComboByTag(wallpaperIntervalCombo, WallpaperIntervalMin.ToString());
@@ -138,85 +140,36 @@ namespace OneSentenceTile
         }
 
         // ------------------------------------------------------------ 磁贴
-        private string TileIntervalTag
-        {
-            get { return GetString("tileInterval", "Realtime"); }
-            set { SetString("tileInterval", value); }
-        }
 
-        private static PeriodicUpdateRecurrence ParseInterval(string tag)
-        {
-            switch (tag)
-            {
-                case "HalfHour": return PeriodicUpdateRecurrence.HalfHour;
-                case "Hour": return PeriodicUpdateRecurrence.Hour;
-                case "SixHours": return PeriodicUpdateRecurrence.SixHours;
-                case "TwelveHours": return PeriodicUpdateRecurrence.TwelveHours;
-                case "Daily": return PeriodicUpdateRecurrence.Daily;
-                default: return PeriodicUpdateRecurrence.HalfHour;
-            }
-        }
 
-        /// <summary>按当前设置启动 / 停止磁贴更新。“实时”模式改为 App 自己拉一次 XML 立刻推给磁贴。</summary>
+        /// <summary>磁贴始终「实时」：App 现拉一次 XML 立刻推给磁贴（Pages / Worker 都一样）。</summary>
         private async Task ApplyTileAsync()
         {
-            var updater = TileUpdateManager.CreateTileUpdaterForApplication();
             if (!isTileFresh.IsOn)
             {
-                try { updater.StopPeriodicUpdate(); } catch { }
-                SetTileStatus("磁贴已关闭");
+                try { TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate(); } catch { }
                 return;
             }
 
-            SetTileStatus("正在连接磁贴服务器…");
             var uri = await TileSource.ResolveAsync();
-            var host = uri.Host;
+            try { TileUpdateManager.CreateTileUpdaterForApplication().StopPeriodicUpdate(); } catch { }
+            await PushTileNowAsync(uri);
+            UpdateAlignAvailability(uri);
+        }
 
-            if (TileIntervalTag == "Realtime")
+        /// <summary>Pages 是静态文件，改不了标题/出处的对齐，所以用 Pages 时把两个下拉禁用。</summary>
+        private void UpdateAlignAvailability(Uri uri)
+        {
+            var isPages = uri != null && uri.Host.EndsWith("github.io", StringComparison.OrdinalIgnoreCase);
+            tileTitleAlignCombo.IsEnabled = !isPages;
+            tileAttrAlignCombo.IsEnabled = !isPages;
+            if (isPages)
             {
-                try { updater.StopPeriodicUpdate(); } catch { }
-                var ok = await PushTileNowAsync(uri);
-                SetTileStatus(ok ? "已刷新（" + host + "）" : "刷新失败：连不上 " + host);
-            }
-            else
-            {
-                try
-                {
-                    updater.StartPeriodicUpdate(uri, ParseInterval(TileIntervalTag));
-                    SetTileStatus("已设为每 " + IntervalLabel(TileIntervalTag) + " 刷新（" + host + "）");
-                }
-                catch (Exception ex)
-                {
-                    SetTileStatus("设置失败：" + ex.Message);
-                }
+                SelectComboByTag(tileTitleAlignCombo, "center");
+                SelectComboByTag(tileAttrAlignCombo, "right");
             }
         }
 
-        private void SetTileStatus(string text)
-        {
-            tileStatusText.Text = text ?? "";
-        }
-
-        private static string IntervalLabel(string tag)
-        {
-            switch (tag)
-            {
-                case "HalfHour": return "30 分钟";
-                case "Hour": return "1 小时";
-                case "SixHours": return "6 小时";
-                case "TwelveHours": return "12 小时";
-                case "Daily": return "24 小时";
-                default: return "实时";
-            }
-        }
-
-        private async void refreshTileButton_Click(object sender, RoutedEventArgs e)
-        {
-            SetTileStatus("正在刷新…");
-            await ApplyTileAsync();
-        }
-
-        /// <summary>立刻下载磁贴 XML 并作为本地通知推上去（实时刷新用）。</summary>
         private async Task<bool> PushTileNowAsync(Uri uri)
         {
             try
@@ -237,6 +190,11 @@ namespace OneSentenceTile
             }
         }
 
+        private async void refreshTileButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ApplyTileAsync();
+        }
+
         private async void isTileFresh_Toggled(object sender, RoutedEventArgs e)
         {
             if (_loading) return;
@@ -244,14 +202,6 @@ namespace OneSentenceTile
             await ApplyTileAsync();
         }
 
-        private async void tileIntervalCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-        {
-            var item = tileIntervalCombo.SelectedItem as ComboBoxItem;
-            if (item == null) return;
-            TileIntervalTag = (string)item.Tag;
-            if (_loading) return;
-            await ApplyTileAsync();
-        }
 
         private async void isWorkerFirst_Toggled(object sender, RoutedEventArgs e)
         {
@@ -812,6 +762,99 @@ namespace OneSentenceTile
         public void openAuto()
         {
             mainSplitView.IsPaneOpen = true;
+        }
+
+        // ------------------------------------------------------------ 下拉填充 / 字体对话框
+        private static readonly string[,] TileStyleTable = new string[,]
+        {
+            { "caption", "极小 12" }, { "captionSubtle", "极小·淡 12" },
+            { "body", "小 15" }, { "bodySubtle", "小·淡 15" },
+            { "base", "标准 15" }, { "baseSubtle", "标准·淡 15" },
+            { "subtitle", "中 20" }, { "subtitleSubtle", "中·淡 20" },
+            { "title", "大 24" }, { "titleSubtle", "大·淡 24" },
+            { "subheader", "特大 34" }, { "subheaderSubtle", "特大·淡 34" },
+            { "header", "巨大 46" }, { "headerSubtle", "巨大·淡 46" }
+        };
+
+        private void FillTileStyleCombos()
+        {
+            foreach (var combo in new[] { tileTitleStyleCombo, tileQuoteStyleCombo, tileAttrStyleCombo })
+            {
+                if (combo.Items.Count > 0) continue;
+                for (int i = 0; i < TileStyleTable.GetLength(0); i++)
+                {
+                    combo.Items.Add(new ComboBoxItem { Content = TileStyleTable[i, 1], Tag = TileStyleTable[i, 0] });
+                }
+            }
+        }
+
+        private void FillUiSizeCombos()
+        {
+            FillSizes(uiTitleSizeCombo, new[] { 16.0, 18, 20, 22, 24, 26, 28, 30, 32, 34, 38, 42, 46, 52, 60 });
+            FillSizes(uiQuoteSizeCombo, new[] { 16.0, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 40, 44, 48, 56, 64, 72 });
+            FillSizes(uiFromSizeCombo, new[] { 10.0, 12, 14, 16, 18, 20, 22, 24, 28, 32, 36 });
+        }
+
+        private static void FillSizes(ComboBox combo, double[] sizes)
+        {
+            if (combo.Items.Count > 0) return;
+            foreach (var s in sizes)
+            {
+                var text = ((int)s).ToString();
+                combo.Items.Add(new ComboBoxItem { Content = text, Tag = text });
+            }
+        }
+
+        private static readonly string[] SystemFonts =
+        {
+            "Microsoft YaHei UI", "Microsoft YaHei", "Microsoft YaHei Light",
+            "DengXian", "DengXian Light", "SimSun", "NSimSun", "SimHei",
+            "KaiTi", "FangSong", "YouYuan", "LiSu",
+            "STXihei", "STKaiti", "STSong", "STFangsong", "FZShuTi", "FZYaoti",
+            "Source Han Sans SC", "Source Han Serif SC", "Noto Sans SC",
+            "Segoe UI", "Segoe UI Light", "Segoe UI Semibold",
+            "Arial", "Arial Black", "Calibri", "Cambria", "Candara", "Consolas",
+            "Cascadia Code", "Courier New", "Georgia", "Impact", "Tahoma",
+            "Times New Roman", "Trebuchet MS", "Verdana"
+        };
+
+        private async void pickFontButton_Click(object sender, RoutedEventArgs e)
+        {
+            var list = new ListView
+            {
+                Height = 380,
+                SelectionMode = ListViewSelectionMode.Single
+            };
+            foreach (var name in SystemFonts)
+            {
+                list.Items.Add(new ListViewItem
+                {
+                    Content = name,
+                    FontFamily = new FontFamily(name)
+                });
+            }
+            if (list.Items.Count > 0) list.SelectedIndex = 0;
+
+            var dialog = new ContentDialog
+            {
+                Title = "选择系统字体",
+                Content = new ScrollViewer { Content = list },
+                PrimaryButtonText = "应用",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary) return;
+
+            var item = list.SelectedItem as ListViewItem;
+            if (item == null) return;
+            var fontName = item.Content as string;
+            customFontBox.Text = fontName;
+            SetString("uiFontCustom", fontName);
+            SetString("uiFont", "custom");
+            SelectComboByTag(uiFontCombo, "custom");
+            ApplyUiFont();
         }
     }
 }
