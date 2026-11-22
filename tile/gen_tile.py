@@ -41,9 +41,9 @@ DEFAULTS = {
     "showAttr": True,
     "titleAlign": "left",
     "attrAlign": "right",
-    "titleStyle": "subheader",
-    "quoteStyle": "subtitle",
-    "attrStyle": "baseSubtle",
+    "titleStyle": "title",
+    "quoteStyle": "base",
+    "attrStyle": "captionSubtle",
 }
 
 PLACEHOLDER = "今日一言暂时取不到，稍后再试。"

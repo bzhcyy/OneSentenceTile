@@ -48,18 +48,26 @@ namespace OneSentenceTile
             catch { }
 
             // 一次性迁移：对齐默认值从「居中」改成「标题靠左 / 出处靠右」
-            if (GetString("settingsRev", "") != "2")
+            if (GetString("settingsRev", "") != "4")
             {
+                // 默认：标题靠左、出处靠右、标题特大34、正文中20、出处小15
                 SetString("tileTitleAlign", "left");
                 SetString("tileAttrAlign", "right");
-                SetString("settingsRev", "2");
+                SetString("tileTitleStyle", "title");
+                SetString("tileQuoteStyle", "base");
+                SetString("tileAttrStyle", "captionSubtle");
+                SetBool("tileOn", true);
+                SetBool("preferWorker", true);
+                SetBool("tileShowTitle", true);
+                SetBool("tileShowAttr", true);
+                SetString("settingsRev", "4");
             }
 
             FillTileStyleCombos();
             FillUiSizeCombos();
 
             _loading = true;
-            isTileFresh.IsOn = GetBool("tileOn", false);
+            isTileFresh.IsOn = GetBool("tileOn", true);
             isWorkerFirst.IsOn = TileSource.PreferWorker;
             isDisplayRequest.IsOn = GetBool("keepOn", false);
             isfullScreen.IsOn = GetBool("fullscreen", false);
@@ -373,12 +381,12 @@ namespace OneSentenceTile
             sb.Append("<binding template=\"TileWide\">");
             if (TileSource.ShowTitle) sb.Append(Text(tStyle, title, tAlign, 0));
             sb.Append(Text(qStyle, indent + quote, "", 0));
-            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 0));
+            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 2));
             sb.Append("</binding>");
             sb.Append("<binding template=\"TileLarge\">");
             if (TileSource.ShowTitle) sb.Append(Text(tStyle, title, tAlign, 0));
             sb.Append(Text(qStyle, indent + quote, "", 5));
-            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 0));
+            if (TileSource.ShowAttr && attr.Length > 0) sb.Append(Text(aStyle, attr, aAlign, 2));
             sb.Append("</binding>");
             sb.Append("</visual></tile>");
             return sb.ToString();
