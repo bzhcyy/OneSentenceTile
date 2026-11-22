@@ -105,7 +105,15 @@ if ($includeMobile -and -not $mobileFound) { Write-Warning '强制引用 Windows
 #   * 安装：把 OneSentenceTile.cer 导入 本地计算机 → 受信任人（TrustedPeople）；
 #   * 只有哪天证书真的换了（缓存被清）才需要重新导入一次。
 Step '准备签名证书'
-$certDir = Join-Path $logDir 'cert'
+# 优先用仓库里固定的证书（cert/），这样证书不会因为缓存过期而变。
+# 没有就用 build/cert（Actions 缓存目录）。
+$repoCertDir = Join-Path $repoRoot 'cert'
+if (Test-Path (Join-Path $repoCertDir 'OneSentenceTile.pfx')) {
+    $certDir = $repoCertDir
+    Write-Host "使用仓库内固定证书：$certDir"
+} else {
+    $certDir = Join-Path $logDir 'cert'
+}
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
 
 $pfx = Join-Path $certDir 'OneSentenceTile.pfx'
@@ -147,7 +155,6 @@ else {
     Write-Host "生成自签证书：Subject=$publisher（5 年）"
     $cert = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher `
         -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' `
-        -TextExtension @('2.5.29.19={text}ca=1&pathlength=0') `
         -NotAfter (Get-Date).AddYears(5)
     Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $secure | Out-Null
     Export-Certificate -Cert $cert -FilePath $cer | Out-Null

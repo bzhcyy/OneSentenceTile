@@ -78,6 +78,20 @@ jobs:
           path: build/cert
           key: uwp-dev-cert-v2
 
+      - name: 使用固定证书（可选，来自 Secrets）
+        shell: pwsh
+        env:
+          SIGNING_PFX: ${{ secrets.SIGNING_PFX_BASE64 }}
+          SIGNING_CER: ${{ secrets.SIGNING_CER_BASE64 }}
+        run: |
+          if (-not $env:SIGNING_PFX) { Write-Host '未配置 SIGNING_PFX_BASE64，跳过（会用缓存或新生成的证书）'; exit 0 }
+          New-Item -ItemType Directory -Force build/cert | Out-Null
+          [IO.File]::WriteAllBytes('build/cert/OneSentenceTile.pfx', [Convert]::FromBase64String($env:SIGNING_PFX))
+          if ($env:SIGNING_CER) {
+            [IO.File]::WriteAllBytes('build/cert/OneSentenceTile.cer', [Convert]::FromBase64String($env:SIGNING_CER))
+          }
+          Write-Host '已写入固定证书，本次构建不会重新生成'
+
       - name: 打包
         shell: powershell
         run: .\build-uwp.ps1 -Configuration Release -NoDotNetNative
