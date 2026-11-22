@@ -123,7 +123,7 @@ $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainTex
 if (-not (Test-Path $rootPfx)) {
     Write-Host "生成根证书：$rootSubject（10 年）"
     $rootCa = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
-        -KeyUsage CertSign, CRLSign, DigitalSignature -KeyExportPolicy Exportable `
+        -KeyUsage CertSign, CRLSign -KeyExportPolicy Exportable `
         -FriendlyName 'KienSticn Root CA' -CertStoreLocation 'Cert:\CurrentUser\My' `
         -TextExtension @('2.5.29.19={text}ca=1&pathlength=1') -NotAfter (Get-Date).AddYears(10)
     Export-PfxCertificate -Cert $rootCa -FilePath $rootPfx -Password $secure | Out-Null
@@ -159,12 +159,24 @@ else {
     Write-Host "已生成: $pfx / $cer"
 }
 
+# 叶证书也要在证书存储里，Signtool 用 /sha1 才能找到它
+if (Test-Path $pfx) {
+    try { Import-PfxCertificate -FilePath $pfx -Password $secure -CertStoreLocation 'Cert:\CurrentUser\My' | Out-Null }
+    catch { Write-Warning "导入叶证书失败：$($_.Exception.Message)" }
+}
+
 Write-Host "根证书（只需要装一次）: $rootCer"
 
 # ---------- 5. 打包 ----------
 Step "编译打包（$Configuration / $Platform）"
 $appxDir = Join-Path $repoRoot 'OneSentenceTile\AppPackages\'
 # MSBuild 命令行里的路径统一用正斜杠：反斜杠结尾会转义掉收尾引号，导致 /p 参数解析错乱
+$certThumbprint = ''
+if (Test-Path $pfx) {
+    try { $certThumbprint = (Get-PfxCertificate -FilePath $pfx).Thumbprint } catch { }
+}
+if (-not $certThumbprint) { Write-Warning '拿不到证书指纹，签名可能失败' }
+else { Write-Host "签名证书指纹: $certThumbprint" }
 $appxDirArg = ($appxDir -replace '\\', '/')
 $pfxArg = ($pfx -replace '\\', '/')
 $slnArg = ($sln -replace '\\', '/')
@@ -193,6 +205,9 @@ else {
     $msbuildArgs += '/p:AppxPackageSigningEnabled=true'
     $msbuildArgs += "/p:PackageCertificateKeyFile=$pfxArg"
     $msbuildArgs += "/p:PackageCertificatePassword=$CertificatePassword"
+    # 用 SHA1 指纹精确指定叶证书，否则 Signtool 会按 Subject 模糊匹配，
+    # 同时命中「CN=KienSticn」和「CN=KienSticn Root CA」而报 APPX1204。
+    $msbuildArgs += "/p:PackageCertificateThumbprint=$certThumbprint"
 }
 if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
     $msbuildArgs += '/p:UseDotNetNativeToolchain=false'
