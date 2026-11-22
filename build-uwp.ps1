@@ -164,7 +164,7 @@ else {
     Write-Host "用根证书签发叶证书：$publisher（3 年）"
     $leaf = New-SelfSignedCertificate -Type CodeSigningCert -Subject $publisher -Signer $rootCert `
         -FriendlyName 'OneSentenceTile signer' -CertStoreLocation 'Cert:\CurrentUser\My' -NotAfter (Get-Date).AddYears(3)
-    Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $secure -ChainOption BuildChain | Out-Null
+    Export-PfxCertificate -Cert $leaf -FilePath $pfx -Password $secure -ChainOption EndEntityCertOnly | Out-Null
     Export-Certificate -Cert $leaf -FilePath $cer | Out-Null
     Write-Host "已生成: $pfx / $cer"
 }
