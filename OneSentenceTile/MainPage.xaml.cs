@@ -48,7 +48,7 @@ namespace OneSentenceTile
             catch { }
 
             // 一次性迁移：对齐默认值从「居中」改成「标题靠左 / 出处靠右」
-            if (GetString("settingsRev", "") != "4")
+            if (GetString("settingsRev", "") != "5")
             {
                 // 默认：标题靠左、出处靠右、标题特大34、正文中20、出处小15
                 SetString("tileTitleAlign", "left");
@@ -60,7 +60,7 @@ namespace OneSentenceTile
                 SetBool("preferWorker", true);
                 SetBool("tileShowTitle", true);
                 SetBool("tileShowAttr", true);
-                SetString("settingsRev", "4");
+                SetString("settingsRev", "5");
             }
 
             FillTileStyleCombos();
@@ -272,17 +272,14 @@ namespace OneSentenceTile
             }
         }
 
-        /// <summary>Pages 是静态文件，改不了标题/出处的对齐，所以用 Pages 时把两个下拉禁用。</summary>
+        /// <summary>
+        /// 对齐选项始终可用：磁贴 XML 由 App 本地重建（RebuildTileXml），
+        /// 标题/出处的对齐对 Worker 和 Pages 源都生效，不存在“静态文件改不了”的问题。
+        /// </summary>
         private void UpdateAlignAvailability(Uri uri)
         {
-            var isPages = uri != null && uri.Host.EndsWith("github.io", StringComparison.OrdinalIgnoreCase);
-            tileTitleAlignCombo.IsEnabled = !isPages;
-            tileAttrAlignCombo.IsEnabled = !isPages;
-            if (isPages)
-            {
-                SelectComboByTag(tileTitleAlignCombo, "center");
-                SelectComboByTag(tileAttrAlignCombo, "right");
-            }
+            tileTitleAlignCombo.IsEnabled = true;
+            tileAttrAlignCombo.IsEnabled = true;
         }
 
         private async Task<bool> PushTileNowAsync(Uri uri)
