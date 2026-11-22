@@ -108,7 +108,7 @@ Step '准备签名证书'
 $certDir = Join-Path $logDir 'cert'
 if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | Out-Null }
 
-$rootSubject = 'CN=KienSticn Root CA'
+$rootSubject = 'CN=OneSentenceTile Dev Root'
 $rootPfx = Join-Path $certDir 'KienSticnRootCA.pfx'
 $rootCer = Join-Path $certDir 'KienSticnRootCA.cer'
 $pfx = Join-Path $certDir 'OneSentenceTile.pfx'
@@ -124,7 +124,7 @@ if (-not (Test-Path $rootPfx)) {
     Write-Host "生成根证书：$rootSubject（10 年）"
     $rootCa = New-SelfSignedCertificate -Type Custom -Subject $rootSubject `
         -KeyUsage CertSign, CRLSign -KeyExportPolicy Exportable `
-        -FriendlyName 'KienSticn Root CA' -CertStoreLocation 'Cert:\CurrentUser\My' `
+        -FriendlyName 'OneSentenceTile Dev Root' -CertStoreLocation 'Cert:\CurrentUser\My' `
         -TextExtension @('2.5.29.19={text}ca=1&pathlength=1') -NotAfter (Get-Date).AddYears(10)
     Export-PfxCertificate -Cert $rootCa -FilePath $rootPfx -Password $secure | Out-Null
     Export-Certificate -Cert $rootCa -FilePath $rootCer | Out-Null
@@ -205,9 +205,8 @@ else {
     $msbuildArgs += '/p:AppxPackageSigningEnabled=true'
     $msbuildArgs += "/p:PackageCertificateKeyFile=$pfxArg"
     $msbuildArgs += "/p:PackageCertificatePassword=$CertificatePassword"
-    # 用 SHA1 指纹精确指定叶证书，否则 Signtool 会按 Subject 模糊匹配，
-    # 同时命中「CN=KienSticn」和「CN=KienSticn Root CA」而报 APPX1204。
-    $msbuildArgs += "/p:PackageCertificateThumbprint=$certThumbprint"
+    # 不传 PackageCertificateThumbprint：改用 /f pfx 直接签名，
+    # 避免 Signtool 去证书库里按 Subject/SHA1 查找时卡住或歧义。
 }
 if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
     $msbuildArgs += '/p:UseDotNetNativeToolchain=false'
@@ -215,9 +214,31 @@ if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
 
 Write-Host "命令行：msbuild $($msbuildArgs -join ' ')"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-& $msbuild @msbuildArgs 2>&1 | Tee-Object -FilePath $log
-$code = $LASTEXITCODE
+
+# 用 Start-Process + 超时，避免签名/还原卡死时一直挂着
+$timeoutMin = 20
+$proc = Start-Process -FilePath $msbuild -ArgumentList $msbuildArgs -NoNewWindow -PassThru `
+    -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+$finished = $proc.WaitForExit($timeoutMin * 60 * 1000)
 $sw.Stop()
+
+if (-not $finished) {
+    Write-Warning "编译超过 $timeoutMin 分钟仍未结束，强制终止（多半卡在签名或 NuGet 还原）"
+    try { $proc.Kill() } catch { }
+    Write-Host '--- 日志尾部 ---' -ForegroundColor Yellow
+    Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Write-Host
+    if ($env:GITHUB_STEP_SUMMARY) {
+        '### 编译超时，日志尾部' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+        '```' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+        Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+        '```' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
+    }
+    throw "编译超时（${timeoutMin} 分钟），日志：$log"
+}
+
+$code = $proc.ExitCode
+Get-Content $log -Tail 15 -ErrorAction SilentlyContinue | Write-Host
+if (Test-Path "$log.err") { Get-Content "$log.err" -Tail 5 -ErrorAction SilentlyContinue | Write-Host }
 Write-Host ("编译耗时: {0:N1}s，退出码: {1}" -f $sw.Elapsed.TotalSeconds, $code)
 
 if ($code -ne 0) {
