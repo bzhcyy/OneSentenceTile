@@ -144,7 +144,7 @@ namespace OneSentenceTile
 
         public static string TitleAlign
         {
-            get { return GetSetting("tileTitleAlign", "center"); }
+            get { return GetSetting("tileTitleAlign", "left"); }
             set { PutSetting("tileTitleAlign", value); }
         }
 

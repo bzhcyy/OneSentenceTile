@@ -17,9 +17,9 @@ name: Publish live tile to GitHub Pages
 
 on:
   schedule:
-    # 每小时整点跑一次：磁贴内容（每日一言）每小时换一条。
-    # Windows 每 30 分钟来拉一次，所以最长约 1.5 小时才会看到新的一条，属正常。
-    - cron: '0 * * * *'
+    # 每 15 分钟生成一次，让 Pages 上的 tile.xml 尽量新。
+    # Pages 每仓库每小时约 10 次部署上限，15 分钟（4 次/小时）安全。
+    - cron: '*/15 * * * *'
   workflow_dispatch:
   push:
     branches: [master, main]

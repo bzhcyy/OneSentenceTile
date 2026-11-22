@@ -30,7 +30,7 @@ DEFAULTS = {
     "quotePrefix": "",
     "showAttribution": True,
     "attributionSep": " —— ",
-    "indent": "",
+    "indent": "\u3000\u3000",
     "hitokotoUrl": "https://v1.hitokoto.cn/",
     "types": ["", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
     "clipMedium": 40,
@@ -39,7 +39,7 @@ DEFAULTS = {
     "maxPayloadBytes": 4600,
     "showTitle": True,
     "showAttr": True,
-    "titleAlign": "center",
+    "titleAlign": "left",
     "attrAlign": "right",
     "titleStyle": "subheader",
     "quoteStyle": "subtitle",
@@ -237,8 +237,8 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   <h1>一言 Tile 磁贴服务器</h1>
   <p class="sub">Windows 磁贴 · 每小时自动更新 · 数据来自 <a href="https://hitokoto.cn">一言（hitokoto）</a></p>
 
-  <blockquote>__QUOTE__</blockquote>
-  <p class="from">__FROM__</p>
+  <blockquote id="quote">__QUOTE__</blockquote>
+  <p class="from" id="from">__FROM__</p>
 
   <div class="meta">
     <div>生成时间</div><div>__TIME__</div>
@@ -247,7 +247,31 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   </div>
 
   <div class="cats">__CATS__</div>
+
+  <p class="sub" style="margin-top:26px">
+    这一页每 60 秒从 <a href="https://v1.hitokoto.cn/">v1.hitokoto.cn</a> 现取一条，和磁贴无关；磁贴内容由 tile.xml 提供。
+  </p>
 </main>
+<script>
+(function () {
+  var q = document.getElementById('quote');
+  var f = document.getElementById('from');
+  function pull() {
+    fetch('https://v1.hitokoto.cn/', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.hitokoto) return;
+        q.textContent = d.hitokoto;
+        var who = (d.from_who || '').trim();
+        var src = (d.from || '').trim();
+        f.textContent = src ? ('—— ' + (who ? who + '《' + src + '》' : '《' + src + '》')) : '';
+      })
+      .catch(function () { /* 取不到就保留服务端生成的那条 */ });
+  }
+  pull();
+  setInterval(pull, 60000);
+})();
+</script>
 </body>
 </html>
 """

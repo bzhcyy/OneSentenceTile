@@ -4,7 +4,7 @@
   "quotePrefix": "",
   "showAttribution": true,
   "attributionSep": " —— ",
-  "indent": "",
+  "indent": "　　",
   "hitokotoUrl": "https://v1.hitokoto.cn/",
   "types": [
     "",
@@ -30,6 +30,6 @@
   "attrStyle": "baseSubtle",
   "showTitle": true,
   "showAttr": true,
-  "titleAlign": "center",
+  "titleAlign": "left",
   "attrAlign": "right"
 }
