@@ -64,36 +64,6 @@ push-to-github.ps1         无 Git 环境下一键同步到 GitHub
 set-tile-url.ps1           改磁贴服务器地址
 ```
 
-## 磁贴服务器
-
-| | 地址 | 说明 |
-|---|---|---|
-| 主 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取，缓存 1 小时；支持 `?type=d` |
-| 备 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | 每小时生成；分类各自一个文件 `tile-d.xml` |
-
-App 启动时真实 GET 一次优先源，4 秒超时，内容含 `<tile` 才算可用，否则换另一个。
-两个都不通时仍按优先源走，磁贴内容由清单里的默认地址兜底。
-
-Worker 源码见 `worker.js`（部署到 Cloudflare Workers，免费额度 10 万请求/天）。
-
-## 构建
-
-**云端（推荐）**：push 后 Actions → `Build UWP package` → 下载 `uwp-package` → 右键 `Add-AppDevPackage.ps1` 运行。
-
-**打 Release**：推一个 `v*` tag，`release.yml` 会自动编译并把 `.appxbundle` 挂到 Release 上：
-
-```bash
-git tag v1.3.0 && git push origin v1.3.0
-```
-
-**本地**：需要 VS 2022 + UWP 工作负载。
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release -NoDotNetNative
-```
-
-签名证书按清单里的 `Publisher`（`CN=KienSticn`）自动生成；换了 Publisher 脚本会自动重签。
-
 ## 安装
 
 1. 卸载旧版（历史版本 Identity 是 `800948F61A16.1s`）
