@@ -97,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release 
 用一张自签的代码签名证书（`CN=KienSticn`），构建时缓存在 Actions 的 `build/cert` 里，
 **同一个缓存不清理，证书就不会变**，所以后续更新版本不用重新装证书。
 
-首次安装时把它装进「受信任人」即可（管理员 PowerShell）：
+证书沿用 1.3.6 那次构建的同一张（缓存 key `uwp-dev-cert-v2`），所以从 1.3.6 升级到新版本**不需要重装证书**。首次安装时把它装进「受信任人」即可（管理员 PowerShell）：
 
 ```powershell
 Import-Certificate -FilePath .\OneSentenceTile_1.3.14.0_x64.cer -CertStoreLocation Cert:\LocalMachine\TrustedPeople
