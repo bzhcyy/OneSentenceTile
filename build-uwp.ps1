@@ -111,8 +111,11 @@ if (-not (Test-Path $certDir)) { New-Item -ItemType Directory -Path $certDir | O
 $pfx = Join-Path $certDir 'OneSentenceTile.pfx'
 $cer = Join-Path $certDir 'OneSentenceTile.cer'
 
-$publisher = [regex]::Match((Get-Content $manifest -Raw), 'Publisher="([^"]+)"').Groups[1].Value
+$manifestText = Get-Content $manifest -Raw
+$publisher = [regex]::Match($manifestText, 'Publisher="([^"]+)"').Groups[1].Value
 if (-not $publisher) { throw '清单里没读到 Publisher' }
+$manifestVersion = [regex]::Match($manifestText, 'Version="([\d.]+)"').Groups[1].Value
+Write-Host "清单版本: $manifestVersion（打包产物应是 OneSentenceTile_${manifestVersion}_*.appxbundle）"
 $secure = ConvertTo-SecureString -String $CertificatePassword -Force -AsPlainText
 
 function Test-CertOk([string]$path) {
@@ -193,31 +196,9 @@ if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
 
 Write-Host "命令行：msbuild $($msbuildArgs -join ' ')"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-
-# 用 Start-Process + 超时，避免签名/还原卡死时一直挂着
-$timeoutMin = 20
-$proc = Start-Process -FilePath $msbuild -ArgumentList $msbuildArgs -NoNewWindow -PassThru `
-    -RedirectStandardOutput $log -RedirectStandardError "$log.err"
-$finished = $proc.WaitForExit($timeoutMin * 60 * 1000)
+& $msbuild @msbuildArgs 2>&1 | Tee-Object -FilePath $log
+$code = $LASTEXITCODE
 $sw.Stop()
-
-if (-not $finished) {
-    Write-Warning "编译超过 $timeoutMin 分钟仍未结束，强制终止（多半卡在签名或 NuGet 还原）"
-    try { $proc.Kill() } catch { }
-    Write-Host '--- 日志尾部 ---' -ForegroundColor Yellow
-    Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Write-Host
-    if ($env:GITHUB_STEP_SUMMARY) {
-        '### 编译超时，日志尾部' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
-        '```' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
-        Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
-        '```' | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
-    }
-    throw "编译超时（${timeoutMin} 分钟），日志：$log"
-}
-
-$code = $proc.ExitCode
-Get-Content $log -Tail 15 -ErrorAction SilentlyContinue | Write-Host
-if (Test-Path "$log.err") { Get-Content "$log.err" -Tail 5 -ErrorAction SilentlyContinue | Write-Host }
 Write-Host ("编译耗时: {0:N1}s，退出码: {1}" -f $sw.Elapsed.TotalSeconds, $code)
 
 if ($code -ne 0) {
