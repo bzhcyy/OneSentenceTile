@@ -196,9 +196,47 @@ if ($NoDotNetNative -or $Configuration -eq 'Debug' -or $StoreUpload) {
 
 Write-Host "命令行：msbuild $($msbuildArgs -join ' ')"
 $sw = [Diagnostics.Stopwatch]::StartNew()
-& $msbuild @msbuildArgs 2>&1 | Tee-Object -FilePath $log
-$code = $LASTEXITCODE
+
+# 关键：不要用管道接 msbuild 的输出。
+# PowerShell 里 `& msbuild ... | Tee-Object` 在多量输出 + stderr 交错时会死锁，
+# 表现就是「卡在编译打包、一行日志都没有」。改成重定向到文件，再边跑边打印。
+Remove-Item $log, "$log.err" -ErrorAction SilentlyContinue
+$proc = Start-Process -FilePath $msbuild -ArgumentList $msbuildArgs -NoNewWindow -PassThru `
+    -RedirectStandardOutput $log -RedirectStandardError "$log.err"
+
+$offset = 0
+$deadline = (Get-Date).AddMinutes(25)
+while (-not $proc.HasExited) {
+    Start-Sleep -Seconds 8
+    if (Test-Path $log) {
+        $lines = @(Get-Content $log -ErrorAction SilentlyContinue)
+        if ($lines.Count -gt $offset) {
+            $lines[$offset..($lines.Count - 1)] | ForEach-Object { Write-Host $_ }
+            $offset = $lines.Count
+        }
+    }
+    if ((Get-Date) -gt $deadline) {
+        Write-Warning '编译超过 25 分钟，强制终止'
+        try { $proc.Kill() } catch { }
+        if ($env:GITHUB_STEP_SUMMARY) {
+            '### 编译卡住，最后 40 行日志' | Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
+            '```' | Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
+            Get-Content $log -Tail 40 -ErrorAction SilentlyContinue | Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
+            '```' | Add-Content $env:GITHUB_STEP_SUMMARY -Encoding utf8
+        }
+        throw "编译超时（25 分钟），日志：$log"
+    }
+}
+$proc.WaitForExit()
 $sw.Stop()
+$code = $proc.ExitCode
+
+# 把没打印完的部分补上
+if (Test-Path $log) {
+    $lines = @(Get-Content $log -ErrorAction SilentlyContinue)
+    if ($lines.Count -gt $offset) { $lines[$offset..($lines.Count - 1)] | ForEach-Object { Write-Host $_ } }
+}
+if (Test-Path "$log.err") { Get-Content "$log.err" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ } }
 Write-Host ("编译耗时: {0:N1}s，退出码: {1}" -f $sw.Elapsed.TotalSeconds, $code)
 
 if ($code -ne 0) {

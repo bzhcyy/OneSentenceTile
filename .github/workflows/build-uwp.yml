@@ -120,6 +120,15 @@ jobs:
           $lines += '首次安装需要管理员权限；装完打开 App，把“动态磁贴”关一次再打开即可看到磁贴文字。'
           $lines | Add-Content -Path $env:GITHUB_STEP_SUMMARY -Encoding utf8
 
+      - name: 证书备份（编译失败也上传）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-cert
+          path: build/cert/
+          if-no-files-found: ignore
+          retention-days: 30
+
       - name: 上传安装包与证书
         if: always()
         uses: actions/upload-artifact@v4
