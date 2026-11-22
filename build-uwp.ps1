@@ -233,6 +233,15 @@ $proc.WaitForExit()
 $sw.Stop()
 $code = $proc.ExitCode
 
+# Start-Process -PassThru 在某些情况下拿不到 ExitCode（返回 $null），
+# 这时用「日志里有没有 : error」+「有没有产出 appxbundle」来判断。
+if ($null -eq $code -or "$code" -eq '') {
+    $hasError = Select-String -Path $log -Pattern ': error' -Quiet -ErrorAction SilentlyContinue
+    $hasBundle = @(Get-ChildItem $appxDir -Recurse -File -Filter '*.appxbundle' -ErrorAction SilentlyContinue).Count -gt 0
+    if ($hasBundle -and -not $hasError) { $code = 0 } else { $code = 1 }
+    Write-Host "（拿不到退出码，按日志/产物判断：$code，appxbundle=$hasBundle，error=$hasError）"
+}
+
 # 把没打印完的部分补上
 if (Test-Path $log) {
     $lines = @(Get-Content $log -ErrorAction SilentlyContinue)
@@ -241,6 +250,14 @@ if (Test-Path $log) {
 if (Test-Path "$log.err") { Get-Content "$log.err" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ } }
 Write-Host ("编译耗时: {0:N1}s，退出码: {1}" -f $sw.Elapsed.TotalSeconds, $code)
 
+if ($code -ne 0) {
+    $bundleNow = @(Get-ChildItem $appxDir -Recurse -File -Filter '*.appxbundle' -ErrorAction SilentlyContinue)
+    $errNow = @(Select-String -Path $log -Pattern ': error' -ErrorAction SilentlyContinue)
+    if ($bundleNow.Count -gt 0 -and $errNow.Count -eq 0) {
+        Write-Host "已产出 $($bundleNow.Count) 个 appxbundle 且日志无 error，按成功处理"
+        $code = 0
+    }
+}
 if ($code -ne 0) {
     Write-Host ''
     Write-Host '--- 日志里的前 15 条错误 ---' -ForegroundColor Yellow
