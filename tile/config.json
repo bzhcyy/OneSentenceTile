@@ -6,12 +6,30 @@
   "attributionSep": " —— ",
   "indent": "　　",
   "hitokotoUrl": "https://v1.hitokoto.cn/",
-  "types": ["", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l"],
+  "types": [
+    "",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l"
+  ],
   "clipMedium": 40,
   "clipWide": 80,
   "clipLarge": 200,
   "maxPayloadBytes": 4600,
   "titleStyle": "subheader",
   "quoteStyle": "subtitle",
-  "attrStyle": "baseSubtle"
+  "attrStyle": "baseSubtle",
+  "showTitle": true,
+  "showAttr": true,
+  "titleAlign": "center",
+  "attrAlign": "right"
 }

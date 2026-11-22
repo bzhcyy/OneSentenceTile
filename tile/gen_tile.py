@@ -37,6 +37,10 @@ DEFAULTS = {
     "clipWide": 80,
     "clipLarge": 200,
     "maxPayloadBytes": 4600,
+    "showTitle": True,
+    "showAttr": True,
+    "titleAlign": "center",
+    "attrAlign": "right",
     "titleStyle": "subheader",
     "quoteStyle": "subtitle",
     "attrStyle": "baseSubtle",
@@ -135,12 +139,20 @@ def build_xml(base_url, item, cfg, type_code=""):
         value = esc(clip(body, limit) if limit else body)
         return f"<text{attrs} hint-wrap=\"true\">{value}</text>"
 
+    show_title = bool(cfg.get("showTitle", True))
+    attr = attribution(item, cfg).strip()
+    show_attr = bool(cfg.get("showAttr", True)) and attr != ""
+    t_align = cfg.get("titleAlign", "center")
+    a_align = cfg.get("attrAlign", "right")
+
     small = f'<text hint-style="caption">{esc(title)}</text>'
     medium = text("captionSubtle", indent + prefix + item["text"], cfg["clipMedium"])
-    wide = text("base", title) + text("baseSubtle", indent + prefix + item["text"], cfg["clipWide"]) \
-        + (text("captionSubtle", attribution(item, cfg).strip(), align="right") if attribution(item, cfg) else "")
-    large = text(cfg["titleStyle"], title) + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipLarge"]) \
-        + (text(cfg["attrStyle"], attribution(item, cfg).strip(), align="right") if attribution(item, cfg) else "")
+    wide = (text("base", title, align=t_align) if show_title else "") \
+        + text("baseSubtle", indent + prefix + item["text"], cfg["clipWide"]) \
+        + (text("captionSubtle", attr, align=a_align) if show_attr else "")
+    large = (text(cfg["titleStyle"], title, align=t_align) if show_title else "") \
+        + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipLarge"]) \
+        + (text(cfg["attrStyle"], attr, align=a_align) if show_attr else "")
 
     return (
         '<?xml version="1.0" encoding="utf-8"?>\n'

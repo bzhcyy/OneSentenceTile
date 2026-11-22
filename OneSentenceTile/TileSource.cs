@@ -130,13 +130,41 @@ namespace OneSentenceTile
             set { PutSetting("tileAttrStyle", value); }
         }
 
+        public static bool ShowTitle
+        {
+            get { return ApplicationData.Current.RoamingSettings.Values["tileShowTitle"] == null ? true : (bool)ApplicationData.Current.RoamingSettings.Values["tileShowTitle"]; }
+            set { ApplicationData.Current.RoamingSettings.Values["tileShowTitle"] = value; }
+        }
+
+        public static bool ShowAttr
+        {
+            get { return ApplicationData.Current.RoamingSettings.Values["tileShowAttr"] == null ? true : (bool)ApplicationData.Current.RoamingSettings.Values["tileShowAttr"]; }
+            set { ApplicationData.Current.RoamingSettings.Values["tileShowAttr"] = value; }
+        }
+
+        public static string TitleAlign
+        {
+            get { return GetSetting("tileTitleAlign", "center"); }
+            set { PutSetting("tileTitleAlign", value); }
+        }
+
+        public static string AttrAlign
+        {
+            get { return GetSetting("tileAttrAlign", "right"); }
+            set { PutSetting("tileAttrAlign", value); }
+        }
+
         /// <summary>拼上样式参数：Worker 会据此改 XML，Pages 静态文件忽略。</summary>
         public static string WithStyle(string url)
         {
             return url + (url.Contains("?") ? "&" : "?")
                 + "titleStyle=" + Uri.EscapeDataString(StyleTitle)
                 + "&quoteStyle=" + Uri.EscapeDataString(StyleQuote)
-                + "&attrStyle=" + Uri.EscapeDataString(StyleAttr);
+                + "&attrStyle=" + Uri.EscapeDataString(StyleAttr)
+                + "&showTitle=" + (ShowTitle ? "1" : "0")
+                + "&showAttr=" + (ShowAttr ? "1" : "0")
+                + "&titleAlign=" + Uri.EscapeDataString(TitleAlign)
+                + "&attrAlign=" + Uri.EscapeDataString(AttrAlign);
         }
 
         private static string GetSetting(string key, string fallback)

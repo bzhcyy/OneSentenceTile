@@ -65,6 +65,10 @@ namespace OneSentenceTile
             SelectComboByTag(tileTitleStyleCombo, TileSource.StyleTitle);
             SelectComboByTag(tileQuoteStyleCombo, TileSource.StyleQuote);
             SelectComboByTag(tileAttrStyleCombo, TileSource.StyleAttr);
+            tileShowTitleSwitch.IsOn = TileSource.ShowTitle;
+            tileShowAttrSwitch.IsOn = TileSource.ShowAttr;
+            SelectComboByTag(tileTitleAlignCombo, TileSource.TitleAlign);
+            SelectComboByTag(tileAttrAlignCombo, TileSource.AttrAlign);
             SelectComboByTag(uiFontCombo, GetString("uiFont", ""));
             customFontBox.Text = GetString("uiFontCustom", "");
             SelectComboByTag(uiTitleSizeCombo, GetString("uiTitleSize", "30"));
@@ -361,6 +365,12 @@ namespace OneSentenceTile
         /// <summary>界面三段文字的字号 / 粗细。</summary>
         private void ApplyUiTextStyles()
         {
+            // 标题 / 出处的显示与对齐（与磁贴共用同一组开关）
+            headerText.Visibility = TileSource.ShowTitle ? Visibility.Visible : Visibility.Collapsed;
+            dailyQuoteFrom.Visibility = TileSource.ShowAttr ? Visibility.Visible : Visibility.Collapsed;
+            ApplyAlign(headerText, TileSource.TitleAlign);
+            ApplyAlign(dailyQuoteFrom, TileSource.AttrAlign);
+
             headerText.FontSize = ParseDouble(GetString("uiTitleSize", "30"), 30);
             dailyQuoteText.FontSize = ParseDouble(GetString("uiQuoteSize", "36"), 36);
             dailyQuoteFrom.FontSize = ParseDouble(GetString("uiFromSize", "18"), 18);
@@ -416,6 +426,61 @@ namespace OneSentenceTile
         {
             SetBool("uiFromBold", uiFromBold.IsOn);
             if (!_loading) ApplyUiTextStyles();
+        }
+
+        private static void ApplyAlign(TextBlock block, string align)
+        {
+            switch ((align ?? "").ToLowerInvariant())
+            {
+                case "left":
+                    block.TextAlignment = TextAlignment.Left;
+                    block.HorizontalAlignment = HorizontalAlignment.Left;
+                    break;
+                case "right":
+                    block.TextAlignment = TextAlignment.Right;
+                    block.HorizontalAlignment = HorizontalAlignment.Right;
+                    break;
+                default:
+                    block.TextAlignment = TextAlignment.Center;
+                    block.HorizontalAlignment = HorizontalAlignment.Center;
+                    break;
+            }
+        }
+
+        private async void tileShowTitleSwitch_Toggled(object sender, RoutedEventArgs e)
+        {
+            TileSource.ShowTitle = tileShowTitleSwitch.IsOn;
+            if (_loading) return;
+            ApplyUiTextStyles();
+            await ApplyTileAsync();
+        }
+
+        private async void tileShowAttrSwitch_Toggled(object sender, RoutedEventArgs e)
+        {
+            TileSource.ShowAttr = tileShowAttrSwitch.IsOn;
+            if (_loading) return;
+            ApplyUiTextStyles();
+            await ApplyTileAsync();
+        }
+
+        private async void tileTitleAlignCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileTitleAlignCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.TitleAlign = (string)item.Tag;
+            if (_loading) return;
+            ApplyUiTextStyles();
+            await ApplyTileAsync();
+        }
+
+        private async void tileAttrAlignCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var item = tileAttrAlignCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.AttrAlign = (string)item.Tag;
+            if (_loading) return;
+            ApplyUiTextStyles();
+            await ApplyTileAsync();
         }
 
         private void applyCustomFontButton_Click(object sender, RoutedEventArgs e)
