@@ -285,8 +285,6 @@
                        VerticalAlignment="Stretch"
                        Visibility="Collapsed"/>
 
-                <Rectangle Name="wallScrim" Fill="#33000000" Visibility="Collapsed"/>
-
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

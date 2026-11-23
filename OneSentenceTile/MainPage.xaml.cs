@@ -699,12 +699,10 @@ namespace OneSentenceTile
             {
                 wallImage.Source = null;
                 wallImage.Visibility = Visibility.Collapsed;
-                wallScrim.Visibility = Visibility.Collapsed;
                 return;
             }
 
             wallImage.Visibility = Visibility.Visible;
-            wallScrim.Visibility = Visibility.Visible;
 
             if (mode == "url")
             {
@@ -861,6 +859,7 @@ namespace OneSentenceTile
                         _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Low, () =>
                         {
                             try { view.TryEnterFullScreenMode(); } catch { }
+                            SetBcakGroundColor();   // 真正进全屏后重刷背景（全屏不用亚克力）
                         });
                     }
                 }
@@ -950,6 +949,11 @@ namespace OneSentenceTile
             settings.Foreground = brush;
         }
 
+        /// <summary>
+        /// 重画背景。最底下是亚克力（窗口模式下把桌面采样进来）或纯背景色，
+        /// 壁纸浮在上面，并按「透」滑块变透明：窗口模式透出桌面磨砂，
+        /// 全屏透出背景色。所以 0 是原图、100 是纯背景色，壁纸和全屏下都有效果。
+        /// </summary>
         private void SetBcakGroundColor()
         {
             try
@@ -957,12 +961,14 @@ namespace OneSentenceTile
                 var r = (byte)BackGroundColorRedSlider.Value;
                 var g = (byte)BackGroundColorGreenSlider.Value;
                 var b = (byte)BackGroundColorBlueSlider.Value;
-                var transparency = BackGroundAcrylicBlueSlider.Value / 100.0;          // 1 = 全透明
-                var alpha = (byte)Math.Max(0, Math.Min(255, Math.Round(255 * transparency)));
+                var density = Math.Max(0, Math.Min(1, BackGroundAcrylicBlueSlider.Value / 100.0));
 
-                // 全屏时窗口没有桌面背景，HostBackdrop 亚克力不会显示，
-                // 改用带 alpha 的纯色，滑块才有可见效果。
-                var canAcrylic = Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase");
+                // 全屏时系统会禁用 HostBackdrop 亚克力，AcrylicBrush 只会退成 FallbackColor；
+                // 半透明色叠在纯黑窗口上会整屏发暗，背景色滑块也跟着失效。
+                // 所以全屏一律用不透明背景色打底，窗口模式才用亚克力。
+                var canAcrylic = !isfullScreen.IsOn
+                    && Windows.Foundation.Metadata.ApiInformation
+                        .IsTypePresent("Windows.UI.Xaml.Media.XamlCompositionBrushBase");
 
                 if (canAcrylic)
                 {
@@ -970,14 +976,19 @@ namespace OneSentenceTile
                     {
                         BackgroundSource = AcrylicBackgroundSource.HostBackdrop,
                         TintColor = Color.FromArgb(255, r, g, b),
-                        FallbackColor = Color.FromArgb(alpha, r, g, b),
-                        TintOpacity = transparency
+                        TintOpacity = density,
+                        // 省电模式 / 窗口失焦时同样会退成这个颜色
+                        FallbackColor = Color.FromArgb(255, r, g, b)
                     };
                 }
                 else
                 {
-                    mainGrid.Background = new SolidColorBrush(Color.FromArgb(alpha, r, g, b));
+                    mainGrid.Background = new SolidColorBrush(Color.FromArgb(255, r, g, b));
                 }
+
+                // 壁纸按同一个浓度变透明。以前「透」只作用在壁纸下面的亚克力上，
+                // 被不透明的壁纸整张挡住，所以有壁纸 / 全屏时滑块看不出效果。
+                wallImage.Opacity = 1 - density;
             }
             catch { }
         }
