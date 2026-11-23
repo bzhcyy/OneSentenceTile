@@ -230,7 +230,7 @@ namespace OneSentenceTile
             {
                 try { updater.StopPeriodicUpdate(); } catch { }
                 StopTileTimer();
-                UpdateTileStatus(false);
+                UpdateTileStatus(false, false);
                 return;
             }
 
@@ -267,8 +267,11 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 拉一次内容并推给磁贴：先试解析出来的源；失败、或者 Pages 快照已经过期，
-        /// 就直连 v1.hitokoto.cn 自己拼 XML —— 这样磁贴不会停在几小时前那条。
+        /// 拉一次内容并推给磁贴。顺序：
+        ///   1. 解析出来的源（Pages 快照过期时直接跳过）；
+        ///   2. 一言官方 API（v1.hitokoto.cn，直连，国内一般可达）；
+        ///   3. Worker（实时源，保持原样）。
+        /// 这样 Pages 停更时磁贴也不会卡在几小时前那条。
         /// </summary>
         private async Task<bool> RefreshTileOnceAsync()
         {
@@ -276,7 +279,7 @@ namespace OneSentenceTile
             try
             {
                 var contentUri = await TileSource.ResolveContentAsync();
-                // 已经确定是过期快照就别推了，直接走下面的「直连一言」
+                // 已经确定是过期快照就别推了，直接走下面的兜底
                 if (!TileSource.PickedIsStale)
                 {
                     ok = await PushTileNowAsync(contentUri);
@@ -285,8 +288,11 @@ namespace OneSentenceTile
             catch { }
 
             bool directUsed = false;
-            if (!ok || TileSource.PickedIsStale)
+            bool workerUsed = false;
+
+            if (!ok)
             {
+                // 兜底 1：一言官方 API
                 var quote = await TileSource.FetchHitokotoAsync();
                 if (quote != null)
                 {
@@ -296,8 +302,15 @@ namespace OneSentenceTile
                 }
             }
 
+            if (!ok && TileSource.SourceLabel != "Worker")
+            {
+                // 兜底 2：Worker（刚才没试过它才试，别重复请求）
+                workerUsed = await PushTileNowAsync(TileSource.WorkerContentUri());
+                if (workerUsed) ok = true;
+            }
+
             UpdateAlignAvailability();
-            UpdateTileStatus(directUsed);
+            UpdateTileStatus(directUsed, workerUsed);
             return ok;
         }
 
@@ -311,8 +324,8 @@ namespace OneSentenceTile
             tileAttrAlignCombo.IsEnabled = true;
         }
 
-        /// <summary>界面上说明「现在用的是哪个源、内容有多新」。</summary>
-        private void UpdateTileStatus(bool directUsed)
+        /// <summary>界面上说明「现在用的是哪个源、内容有多新、走了哪条兜底」。</summary>
+        private void UpdateTileStatus(bool directUsed, bool workerUsed)
         {
             if (tileStatusText == null) return;
             if (!isTileFresh.IsOn)
@@ -329,11 +342,15 @@ namespace OneSentenceTile
             }
             if (directUsed)
             {
-                text += "；已直连一言生成";
+                text += "；快照停更，已改用一言官方 API";
+            }
+            else if (workerUsed)
+            {
+                text += "；已改用 Worker 实时源";
             }
             else if (TileSource.PickedIsStale)
             {
-                text += "；快照过期且直连失败，暂时沿用旧内容";
+                text += "；快照停更，官方与 Worker 都取不到，暂时沿用旧内容";
             }
             tileStatusText.Text = text;
         }
@@ -529,45 +546,58 @@ namespace OneSentenceTile
             // Pages 快照过期时别拿旧句子糊弄界面，直接去问一言
             if (!TileSource.PickedIsStale)
             {
-                try
-                {
-                    var uri = await TileSource.ResolveAsync();
-                    using (var http = new System.Net.Http.HttpClient())
-                    {
-                        http.Timeout = TimeSpan.FromSeconds(8);
-                        var xml = await http.GetStringAsync(uri);
-                        var doc = System.Xml.Linq.XDocument.Parse(xml);
-                        var large = doc.Descendants("binding")
-                                        .Where(b => (string)b.Attribute("template") == "TileLarge")
-                                        .FirstOrDefault()
-                                    ?? doc.Descendants("binding").LastOrDefault();
-                        var texts = large == null
-                            ? new List<string>()
-                            : large.Elements("text").Select(x => x.Value).ToList();
-
-                        var body = texts.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && !IsTitleText(x));
-                        var from = texts.LastOrDefault();
-
-                        dailyQuoteText.Text = string.IsNullOrWhiteSpace(body) ? "（暂时取不到每日一言）" : body.Trim();
-                        dailyQuoteFrom.Text = (from != null && from != body && from.Trim().StartsWith("—"))
-                            ? from.Trim()
-                            : "";
-                        return;
-                    }
-                }
-                catch { }
+                Uri uri = await TileSource.ResolveAsync();
+                if (await ShowQuoteFromUriAsync(uri)) return;
             }
 
-            // 服务器连不上 / 快照过期：直连一言
+            // 兜底 1：一言官方 API
             var quote = await TileSource.FetchHitokotoAsync();
-            if (quote == null)
+            if (quote != null)
             {
-                dailyQuoteText.Text = "（暂时取不到每日一言，请检查网络）";
-                dailyQuoteFrom.Text = "";
+                dailyQuoteText.Text = quote.Text;
+                dailyQuoteFrom.Text = TileSource.FormatAttribution(quote.Who, quote.From);
                 return;
             }
-            dailyQuoteText.Text = quote.Text;
-            dailyQuoteFrom.Text = TileSource.FormatAttribution(quote.Who, quote.From);
+
+            // 兜底 2：Worker
+            if (await ShowQuoteFromUriAsync(TileSource.WorkerContentUri())) return;
+
+            dailyQuoteText.Text = "（暂时取不到每日一言，请检查网络）";
+            dailyQuoteFrom.Text = "";
+        }
+
+        /// <summary>从服务器给的磁贴 XML 里取正文/出处填到界面上，成功返回 true。</summary>
+        private async Task<bool> ShowQuoteFromUriAsync(Uri uri)
+        {
+            try
+            {
+                using (var http = new System.Net.Http.HttpClient())
+                {
+                    http.Timeout = TimeSpan.FromSeconds(8);
+                    var xml = await http.GetStringAsync(uri);
+                    var doc = System.Xml.Linq.XDocument.Parse(xml);
+                    var large = doc.Descendants("binding")
+                                    .Where(b => (string)b.Attribute("template") == "TileLarge")
+                                    .FirstOrDefault()
+                                ?? doc.Descendants("binding").LastOrDefault();
+                    var texts = large == null
+                        ? new List<string>()
+                        : large.Elements("text").Select(x => x.Value).ToList();
+
+                    var body = texts.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && !IsTitleText(x));
+                    var from = texts.LastOrDefault();
+
+                    dailyQuoteText.Text = string.IsNullOrWhiteSpace(body) ? "（暂时取不到每日一言）" : body.Trim();
+                    dailyQuoteFrom.Text = (from != null && from != body && from.Trim().StartsWith("—"))
+                        ? from.Trim()
+                        : "";
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // ------------------------------------------------------------ 磁贴文字样式 / 界面字体

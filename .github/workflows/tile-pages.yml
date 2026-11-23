@@ -12,26 +12,20 @@
 #
 # ⚠ 定时任务不可靠（这是备用源「15 分钟后就不更新」的根因）：
 #   GitHub 对 schedule 只是「尽力而为」——高峰期会推迟，忙起来直接跳过，
-#   本仓库实测出现过 4.6～8.7 小时才跑一次。Pages 是静态托管，自己不会更新，
+#   本仓库实测出现过 4.6～8.7 小时才跑一次。Pages 是纯静态托管，自己不会更新，
 #   所以 App 拿到的永远是上一次部署的副本。
-#   真正能保证 15 分钟的办法：让 cloudflare-worker/ 里的 Worker 用 Cron Trigger
-#   定时调本工作流的 workflow_dispatch（Worker 的 cron 是可靠的）。
+#   App 侧已经兜底：选中 Pages 时读 health.json，快照过期就改走「一言官方 API」，
+#   官方也取不到再用 Worker（Worker 本身不变，仍然是每次请求现取的实时源）。
 #   另外：免费仓库连续 60 天无提交会停掉定时任务（手动 Run workflow 或 push 一次即可恢复）。
 
 name: Publish live tile to GitHub Pages
 
 on:
   schedule:
-    # 每 15 分钟生成一次。注意：GitHub 会推迟甚至跳过这个定时任务（见文件开头的说明），
-    # 所以真正的 15 分钟刷新要靠 cloudflare-worker/ 里的 Worker cron。
-    # Pages 每仓库每小时约 10 次部署上限，下面的 gate 步骤会把重叠的触发去重。
+    # 每 15 分钟生成一次，让 Pages 上的 tile.xml 尽量新。
+    # Pages 每仓库每小时约 10 次部署上限，15 分钟（4 次/小时）安全。
     - cron: '*/15 * * * *'
   workflow_dispatch:
-    inputs:
-      force:
-        description: 强制重新生成（忽略「10 分钟内不重复部署」的去重）
-        type: boolean
-        default: false
   push:
     branches: [master, main]
     paths:
@@ -56,7 +50,6 @@ jobs:
     timeout-minutes: 20
     outputs:
       base: ${{ steps.base.outputs.base }}
-      skip: ${{ steps.gate.outputs.skip }}
     steps:
       - name: 检出仓库
         uses: actions/checkout@v4
@@ -82,27 +75,9 @@ jobs:
           echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "磁贴地址：$base/tile.xml"
 
-      - name: 判断这次要不要真的重新生成
-        id: gate
-        # GitHub 的 schedule 和 Worker 的 workflow_dispatch 会重叠触发。谁先跑谁部署，
-        # 后跑的那个如果发现线上快照还不到 10 分钟就跳过，免得把 Pages 的部署频率打满。
-        # push 和手动 -f force=true 不过滤。
-        shell: bash
-        run: |
-          set -euo pipefail
-          skip=false
-          if [ "${{ github.event_name }}" != "push" ] && [ "${{ inputs.force }}" != "true" ]; then
-            if python tile/check_freshness.py --base-url "${{ steps.base.outputs.base }}" --max-age 10 --strict >/dev/null 2>&1; then
-              skip=true
-              echo "线上快照还不到 10 分钟，跳过这次生成"
-            fi
-          fi
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
-
       - name: 检查上次发布的新鲜度
         # 只做诊断：看看上一次生成到现在隔了多久。GitHub 的 schedule 会被推迟/跳过，
         # 这个数字就是「用户看到的磁贴为什么不动」的直接证据。
-        if: steps.gate.outputs.skip != 'true'
         continue-on-error: true
         shell: bash
         run: |
@@ -110,11 +85,9 @@ jobs:
           python tile/check_freshness.py --base-url "${{ steps.base.outputs.base }}" --max-age 45
 
       - name: 生成 tile.xml（含结构自检）
-        if: steps.gate.outputs.skip != 'true'
         run: python tile/gen_tile.py --out "$GITHUB_WORKSPACE/_site" --base-url "${{ steps.base.outputs.base }}"
 
       - name: 提示 App 端地址是否一致
-        if: steps.gate.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -135,7 +108,6 @@ jobs:
           fi
 
       - name: 检查 Pages 是否已启用
-        if: steps.gate.outputs.skip != 'true'
         continue-on-error: true
         uses: actions/github-script@v7
         with:
@@ -160,11 +132,9 @@ jobs:
             }
 
       - name: 配置 Pages
-        if: steps.gate.outputs.skip != 'true'
         uses: actions/configure-pages@v5
 
       - name: 打包站点
-        if: steps.gate.outputs.skip != 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -188,8 +158,6 @@ jobs:
 
   deploy:
     needs: build
-    # gate 判定「线上还很新」时 build 不产出 artifact，这里就别跑
-    if: needs.build.outputs.skip != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment:
@@ -251,6 +219,6 @@ jobs:
             echo "- 首页（含快照年龄）：$base/"
             echo ""
             echo "> Pages 是静态托管：这次发布之后，下一次刷新取决于 GitHub 的 cron。"
-            echo "> GitHub 会推迟甚至跳过定时任务，想要稳定 15 分钟刷新，"
-            echo "> 用 cloudflare-worker/ 里的 Worker cron 触发 workflow_dispatch。"
+            echo "> GitHub 会推迟甚至跳过定时任务（实测 4～9 小时才跑一次），"
+            echo "> 所以 App 侧会读 health.json 判断快照是否过期，过期就改走一言官方 API，再用 Worker 兜底。"
           } >> "$GITHUB_STEP_SUMMARY"

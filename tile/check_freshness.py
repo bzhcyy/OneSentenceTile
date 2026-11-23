@@ -80,7 +80,7 @@ def main():
         reason = (
             f"Pages 快照已经 {age:.0f} 分钟没更新（期望 {expected} 分钟）。"
             "GitHub 的 schedule 是尽力而为，Pages 自己不会更新——"
-            "需要外部定时触发（cloudflare-worker/ 里的 Worker cron → workflow_dispatch）。"
+            "App 会改用一言官方 API，官方也取不到再退回 Worker。"
         )
         print(("::warning::" if in_actions else "warn: ") + reason, file=sys.stderr)
         return 1 if args.strict else 0

@@ -42,7 +42,7 @@ Windows 10 / 11 桌面磁贴：每小时给你一句「一言」。
 |---|---|
 | **分类** | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 网络 / 其他 / 影视 / 诗词 / 网易云 / 哲学 / 抖机灵 |
 | **刷新** | 实时（现拉现推，默认）/ 15 分钟 / 30 分钟 / 1 / 6 / 12 / 24 小时；任何模式下改完都会立刻推一次 |
-| **双源** | Worker 优先，连不上自动退 Pages；Pages 快照过期时自动改用 Worker，两个都不行就直连一言 |
+| **双源** | Worker 优先，连不上自动退 Pages；Pages 快照过期时改用一言官方 API 直连，官方也取不到再用 Worker |
 | **磁贴文字** | 标题 / 正文 / 出处 各自字号、对齐（左/中/右）、显示开关；XML 由 App 本地重建，两源都生效 |
 | **界面文字** | 字体（含系统字体选择框 + 未知字体自动回退）、三段字号、加粗 |
 | **壁纸** | 关闭 / 本地图片 / 网络地址 / 文件夹轮播（1–60 分钟） |
@@ -139,37 +139,37 @@ Pages 是纯静态托管，自己不会刷新；`tile.xml` 只在 GitHub Actions
 工作流里写的是 `cron: '*/15 * * * *'`，`health.json` 的 `generatedAt` 却经常是两三个小时前——
 所以选了「Pages 优先」、或者 Worker 连不上（`workers.dev` 在国内经常被墙）时，磁贴就会停在旧的那条。
 
-现在做了三层修复：
+现在改的是 **Pages 这一侧**（Worker 完全不动，仍然是每次请求现取的实时源）：
 
-1. **投递端保活（真正的 15 分钟）**：`cloudflare-worker/` 里的 Worker 用 Cron Trigger
-   每 15 分钟调一次 `workflow_dispatch`，GitHub 立刻跑工作流。Worker 的 cron 不会被饿死，
-   而投递仍然是国内可直连的 `github.io`。配置见 [`cloudflare-worker/README.md`](cloudflare-worker/README.md)，
-   只需一个 fine-grained PAT（`Actions: Read and write`）。
-2. **App 不再被骗**：选中 Pages 时读 `health.json` 的 `generatedAt`，超过 45 分钟就认为快照过期，
-   能连 Worker 就换 Worker，连不上就直连 `v1.hitokoto.cn` 自己拼磁贴；Pages 请求一律带 `?v=时间戳`，
-   绕开 GitHub Pages 的 10 分钟 CDN 缓存。设置面板里会显示「磁贴源：Pages（快照 3 小时前生成）」。
-3. **看得见的新鲜度**：`health.json` 多了 `generatedAtUnix` / `refreshMinutes` / `staleAfterMinutes`，
+1. **App 不再被骗**：选中 Pages 时读 `health.json` 的 `generatedAt`，超过 45 分钟就认为快照过期，
+   这时不再推 Pages 的旧内容，而是先直连**一言官方 API**（`v1.hitokoto.cn`）自己拼磁贴；
+   官方也取不到，再退回 **Worker** 实时源；两条都失败才沿用旧内容。
+   Pages 请求一律带 `?v=时间戳`，绕开 GitHub Pages 的 10 分钟 CDN 缓存。
+   设置面板里会显示「磁贴源：Pages（快照 3 小时前生成）；快照停更，已改用一言官方 API」。
+2. **看得见的新鲜度**：`health.json` 多了 `generatedAtUnix` / `refreshMinutes` / `staleAfterMinutes`，
    首页按本地时间显示生成时间、和「已 X 分钟」，超过阈值直接亮黄条；
    `tile/check_freshness.py` 可以随时查线上快照年龄（CI 每次部署前后都会跑）。
+3. **工作流自检更严**：部署后的探测都带 `?v=`（原来可能读到 CDN 旧副本「假通过」），
+   并确认线上 `health.json` 就是这一次生成的；另外给两个 job 加了超时，
+   避免卡住的运行把 concurrency 队列堵死。
 
-> 系统「周期更新」最短只有 30 分钟（Windows 的限制），所以 15 分钟这一档只在 App 运行时生效；
-> App 关掉后由系统按 30 分钟拉一次，此时内容是否新鲜完全取决于上面第 1 条。
+> 系统「周期更新」最短只有 30 分钟（Windows 的限制），所以 15 分钟这一档只在 App 运行时生效。
+> App 关掉后，磁贴内容取决于系统拉到的 Pages 快照——而 GitHub 的 `schedule` 不可靠，
+> 快照可能旧几小时。想让「关着 App 也每 15 分钟变」，只能给 Pages 找一个可靠的外部触发器
+> （例如外部 cron 调 `workflow_dispatch`），这次没有引入，Worker 保持原样。
 
 ## 目录
 
 ```
 OneSentenceTile/        UWP 应用
   MainPage.xaml(.cs)    主界面 + 设置面板
-  TileSource.cs         双源探测、样式/对齐参数
+  TileSource.cs         双源探测、快照新鲜度、样式/对齐参数
   Package.appxmanifest  清单（Identity KienSticn.OneSentenceTile2）
 tile/                   磁贴静态站生成器
   gen_tile.py           生成 tile.xml / 13 个分类 / index.html / health.json
   check_freshness.py    查线上快照年龄（CI 部署前后、本地排查都可用）
   config.json           标题、样式、对齐默认值
-cloudflare-worker/      Cloudflare Worker：实时磁贴 + 每 15 分钟触发 Pages 重新生成
-  worker.js             /tile.xml、/health、/refresh、scheduled() 保活
-  wrangler.toml         cron 触发器与仓库配置
-  README.md             PAT、部署、验证步骤
+cloudflare-worker/      Cloudflare Worker 版磁贴（实时，未改动）
 .github/workflows/      构建、发布、磁贴生成
 build-uwp.ps1           打包脚本（含 CI Summary）
 install-app.ps1         安装脚本

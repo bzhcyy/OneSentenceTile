@@ -21,8 +21,8 @@ namespace OneSentenceTile
     /// 判定方式：
     ///   1. 真实 GET 一次，4 秒超时，内容里出现 &lt;tile 才算「连得上」；
     ///   2. 选中 Pages 时，再读一次 health.json 的 generatedAt：超过 StaleAfterMinutes
-    ///      就当作「过期」——能连上 Worker 就换 Worker；连不上就标记 PickedIsStale，
-    ///      由界面层直连一言自己生成，别让磁贴停在几小时前那条。
+    ///      就标记 PickedIsStale —— 由界面先改走一言官方 API，取不到再用 Worker 兜底，
+    ///      别让磁贴停在几小时前那条。
     /// </summary>
     static class TileSource
     {
@@ -117,8 +117,9 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 按设置的优先级挑一个「能连上、而且内容没过期」的地址；
-        /// 两个都不通时返回优先的那个。
+        /// 按设置的优先级挑一个能连上的地址；两个都不通时返回优先的那个。
+        /// 挑中的是 Pages 时顺带判断快照是否过期（结果放在 PickedIsStale 里，
+        /// 由界面决定是否走「官方 API → Worker」的兜底）。
         /// </summary>
         public static async Task<Uri> ResolveAsync()
         {
@@ -142,22 +143,12 @@ namespace OneSentenceTile
 
             // 选中 Pages 时看一眼快照年龄：静态托管自己不会刷新，
             // GitHub 的 cron 又经常被推迟，所以「连得上」不等于「内容是新的」。
+            // 过期后不在这里换源，交给界面按「一言官方 API → Worker」的顺序兜底；
+            // Worker 保持原样，仍然是每次请求现取的实时源。
             if (_picked == Pages)
             {
                 int age = await PagesAgeMinutesAsync();
-                if (age > StaleAfterMinutes)
-                {
-                    if (await ProbeAsync(WithType(Worker)))
-                    {
-                        // Worker 能连上：直接用实时源
-                        _picked = Worker;
-                    }
-                    else
-                    {
-                        // 两个都指望不上：标记过期，让界面直连一言自己生成
-                        _pickedStale = true;
-                    }
-                }
+                _pickedStale = age > StaleAfterMinutes;
             }
 
             _lastUri = WithStyle(WithCacheBust(WithType(_picked)));
@@ -388,6 +379,16 @@ namespace OneSentenceTile
         {
             var uri = await ResolveAsync();
             var text = uri.AbsoluteUri;
+            return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
+        }
+
+        /// <summary>
+        /// Worker 的内容地址。Worker 是实时源（每次请求现取），只在 Pages 过期、
+        /// 官方 API 也取不到时兜底用，App 对它不做任何改动。
+        /// </summary>
+        public static Uri WorkerContentUri()
+        {
+            var text = WithStyle(WithType(Worker));
             return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
         }
 

@@ -272,9 +272,9 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
     <b>这份磁贴快照已经过期。</b>
     这里由 GitHub Actions 定时生成，而 GitHub 对 <code>schedule</code> 只是「尽力而为」：忙的时候会推迟，
     甚至跳过大半天。Pages 是纯静态托管，自己不会更新，所以拿到的永远是上一次生成的副本。
-    想要稳定的 15 分钟刷新，可以让 Cloudflare Worker 定时触发这个工作流（见仓库 <code>cloudflare-worker/</code>），
-    或者直接用实时源 <a href="__WORKER__">Worker</a>（每次请求现取）。
-    App 检测到快照过期且 Worker 连不上时，会改为直连 v1.hitokoto.cn 自己生成磁贴，不会再卡住。
+    App 检测到快照过期时会改用一言官方 API（v1.hitokoto.cn）自己生成磁贴，
+    官方也取不到再退回实时源 <a href="__WORKER__">Worker</a>，所以开着 App 时不会卡住。
+    （Worker 本身没有改动，仍然是每次请求现取。）
   </div>
 
   <div class="quote" id="card">
