@@ -9,6 +9,7 @@ using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Background;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
+using Windows.Storage;
 using Windows.UI.Notifications;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
@@ -80,13 +81,18 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 启动时决定磁贴用哪个服务器：优先 Worker，连不上自动退回 Pages。
+        /// 启动时决定磁贴用哪个服务器：优先 Worker，连不上自动退回 Pages；
+        /// Pages 快照过期（health.json 很久没更新）时 ResolveAsync 会自动改用 Worker。
         /// 异步探测，不阻塞界面。
         /// </summary>
         private async void ConfigureTileSource()
         {
             try
             {
+                // 用户关掉了动态磁贴：别在启动时又把周期更新打开
+                var tileOn = ApplicationData.Current.RoamingSettings.Values["tileOn"];
+                if (tileOn != null && !(bool)tileOn) return;
+
                 var uri = await TileSource.ResolveAsync();
                 var updater = Windows.UI.Notifications.TileUpdateManager.CreateTileUpdaterForApplication();
                 updater.StartPeriodicUpdate(uri, Windows.UI.Notifications.PeriodicUpdateRecurrence.HalfHour);

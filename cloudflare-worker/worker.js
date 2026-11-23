@@ -2,10 +2,17 @@
  * +1s 磁贴服务器（Cloudflare Worker 版）
  *
  * 直接输出 Windows 磁贴 XML，不需要 Pages / 定时任务：
- *   https://onesentencetile.onesentencetile.workers.dev/tile.xml  → 磁贴 XML（默认每小时固定一条「每日一言：」）
+ *   https://onesentencetile.onesentencetile.workers.dev/tile.xml  → 磁贴 XML（默认每次请求现取）
  *   https://onesentencetile.onesentencetile.workers.dev/health    → 自检 JSON
+ *   https://onesentencetile.onesentencetile.workers.dev/refresh   → 手动触发一次 Pages 重新生成（需 token）
  *
- * 免费额度：10 万请求/天。磁贴每 30 分钟拉一次 ≈ 48 次/天，完全够用。
+ * 还有一个 Cron Trigger（见 wrangler.toml）：每 15 分钟调一次 GitHub 的
+ * workflow_dispatch，让 Pages 上的 tile.xml 真的 15 分钟换一次。
+ * 为什么要这样：GitHub Actions 的 schedule 是「尽力而为」，本仓库实测会被推迟到
+ * 4～9 小时才跑一次，静态的 Pages 于是长时间停更（这就是「备用源 15 分钟后不更新」
+ * 的根因）。Worker 的 cron 是可靠的，而 Github Pages 做投递端对国内网络也友好。
+ *
+ * 免费额度：Worker 10 万请求/天；cron 96 次/天。磁贴每 30 分钟拉一次 ≈ 48 次/天。
  *
  * 刷新策略（CONFIG.refreshMode）：
  *   hourly  = 每小时固定一条，同一小时内所有请求返回同一条（用 Cache API 存 1 小时）
@@ -39,7 +46,12 @@ const CONFIG = {
   //           request = 每次请求都换（磁贴每 30 分钟拉一次就是一条新的）
   refreshMode: 'request',
   utcOffset: 8,               // 小时以北京时间为准
-  cacheSeconds: 60
+  cacheSeconds: 60,
+  // ---- Pages 保活：Worker cron → GitHub workflow_dispatch ----
+  // 目标仓库 / 工作流 / 分支，都可以用环境变量覆盖（wrangler.toml 或 dashboard）
+  githubRepo: 'bzhcyy/OneSentenceTile',
+  workflowFile: 'tile-pages.yml',
+  workflowRef: 'master'
 };
 
 // ---------------- 接口挂了的兜底语录 ----------------
@@ -188,8 +200,50 @@ function buildTileXml(item, opt) {
     + '  </visual>\n</tile>\n';
 }
 
+function jsonResponse(body, status) {
+  return new Response(JSON.stringify(body, null, 2), {
+    status: status || 200,
+    headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
+  });
+}
+
+/**
+ * 调 GitHub 的 workflow_dispatch，立刻跑一次 Pages 生成 + 部署。
+ * 这是绕过「GitHub schedule 被推迟/跳过」的唯一可靠办法。
+ * 需要 Worker 环境变量 GITHUB_TOKEN（fine-grained PAT，Actions: Read and write）。
+ */
+async function dispatchTileWorkflow(env) {
+  const token = env && env.GITHUB_TOKEN;
+  if (!token) return { ok: false, error: '没有配置 GITHUB_TOKEN（wrangler secret put GITHUB_TOKEN）' };
+
+  const repo = (env && env.GITHUB_REPO) || CONFIG.githubRepo;
+  const workflow = (env && env.TILE_WORKFLOW) || CONFIG.workflowFile;
+  const ref = (env && env.TILE_REF) || CONFIG.workflowRef;
+
+  try {
+    const resp = await fetch(
+      'https://api.github.com/repos/' + repo + '/actions/workflows/' + workflow + '/dispatches',
+      {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer ' + token,
+          accept: 'application/vnd.github+json',
+          'content-type': 'application/json',
+          'user-agent': 'OneSentenceTile-Worker'
+        },
+        body: JSON.stringify({ ref })
+      }
+    );
+    if (resp.status === 204) return { ok: true, status: 204, repo, workflow, ref, dispatchedAt: new Date().toISOString() };
+    const detail = (await resp.text()).slice(0, 300);
+    return { ok: false, status: resp.status, repo, workflow, ref, error: detail };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  }
+}
+
 export default {
-  async fetch(request) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     // 分类：单个字母 a~l，非法值按随机处理
     let type = (url.searchParams.get('type') || '').trim().toLowerCase();
@@ -203,6 +257,20 @@ export default {
       titleAlign: alignOf(url.searchParams.get('titleAlign'), 'left'),
       attrAlign: alignOf(url.searchParams.get('attrAlign'), 'right')
     };
+
+    if (url.pathname === '/refresh') {
+      // 手动/外部 cron（cron-job.org 之类）也能调，避免只依赖 Cloudflare 一家。
+      // 设了 REFRESH_TOKEN 就必须带 ?token=...；没设就只接受同源 POST（浏览器直接打开会 405）。
+      const need = env && env.REFRESH_TOKEN;
+      const given = url.searchParams.get('token') || request.headers.get('x-refresh-token') || '';
+      if (need) {
+        if (given !== need) return jsonResponse({ ok: false, error: 'token 不对' }, 401);
+      } else if (request.method === 'GET') {
+        return jsonResponse({ ok: false, error: '没有配置 REFRESH_TOKEN，请用 POST 或设置 token' }, 405);
+      }
+      const result = await dispatchTileWorkflow(env);
+      return jsonResponse(result, result.ok ? 202 : 502);
+    }
 
     if (url.pathname === '/health') {
       const item = await getHitokoto(type, opt);
@@ -218,7 +286,13 @@ export default {
         quote: item.text,
         from: item.from,
         fromWho: item.who,
-        quoteUrl: url.origin + '/tile.xml'
+        quoteUrl: url.origin + '/tile.xml',
+        // cron 保活是否配置好：true 才说明 Pages 会被稳定地 15 分钟刷新一次
+        pageRefresh: {
+          enabled: !!(env && env.GITHUB_TOKEN),
+          repo: (env && env.GITHUB_REPO) || CONFIG.githubRepo,
+          workflow: (env && env.TILE_WORKFLOW) || CONFIG.workflowFile
+        }
       }, null, 2), {
         headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }
       });
@@ -234,5 +308,21 @@ export default {
         'access-control-allow-origin': '*'
       }
     });
+  },
+
+  /**
+   * Cron Trigger（表达式见 wrangler.toml，每 15 分钟）。
+   * 每 15 分钟让 GitHub Actions 跑一次 tile-pages.yml，Pages 上的 tile.xml 就不会再停更几小时。
+   */
+  async scheduled(event, env, ctx) {
+    const run = dispatchTileWorkflow(env).then(function (result) {
+      console.log('tile-pages dispatch', JSON.stringify(result));
+      return result;
+    });
+    if (ctx && typeof ctx.waitUntil === 'function') {
+      ctx.waitUntil(run);
+    } else {
+      await run;
+    }
   }
 };

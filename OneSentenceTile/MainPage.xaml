@@ -54,6 +54,7 @@
                             <ComboBox Name="tileIntervalCombo" Style="{StaticResource Combo}"
                                       SelectionChanged="tileIntervalCombo_SelectionChanged">
                                 <ComboBoxItem Content="实时（打开就刷新）" Tag="Realtime"/>
+                                <ComboBoxItem Content="15 分钟" Tag="QuarterHour"/>
                                 <ComboBoxItem Content="30 分钟" Tag="HalfHour"/>
                                 <ComboBoxItem Content="1 小时" Tag="Hour"/>
                                 <ComboBoxItem Content="6 小时" Tag="SixHours"/>
@@ -67,6 +68,14 @@
                                           OnContent="磁贴源：Worker 优先"
                                           Margin="0,-2"
                                           Toggled="isWorkerFirst_Toggled"/>
+
+                            <!-- 说明当前用的源、快照有多旧；Pages 快照过期时会显示已直连一言 -->
+                            <TextBlock Name="tileStatusText"
+                                       Text="磁贴源：未探测"
+                                       FontSize="12"
+                                       Foreground="#8A8F98"
+                                       TextWrapping="Wrap"
+                                       Margin="2,6,0,0"/>
 
                             <TextBlock Text="一言分类" Style="{StaticResource Label}"/>
                             <ComboBox Name="hitokotoTypeCombo" Style="{StaticResource Combo}"

@@ -37,6 +37,11 @@ DEFAULTS = {
     "clipWide": 80,
     "clipLarge": 200,
     "maxPayloadBytes": 4600,
+    # 期望的刷新周期：Actions 的 cron 是「尽力而为」，健康检查按这个值判断是否过期
+    "refreshMinutes": 15,
+    "staleAfterMinutes": 45,
+    # 实时源（Cloudflare Worker）：App 判断 Pages 过期、且 Worker 可用时会切过去
+    "workerUrl": "https://onesentencetile.onesentencetile.workers.dev/tile.xml",
     "showTitle": True,
     "showAttr": True,
     "titleAlign": "left",
@@ -234,6 +239,13 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   .quote p { margin:0; font-size:24px; line-height:1.65; font-weight:600; }
   .quote .from { margin-top:12px; text-align:right; color:var(--dim); font-size:14px; font-weight:400; }
   .hint { color:var(--dim); font-size:12px; margin:0 0 34px; text-align:right; }
+  .warn { background:#fff4e5; border:1px solid #f0b775; color:#8a4b00; border-radius:12px;
+          padding:14px 16px; margin:0 0 18px; font-size:13px; line-height:1.75; }
+  .warn[hidden] { display:none; }
+  .warn a { color:inherit; text-decoration:underline; }
+  @media (prefers-color-scheme: dark) {
+    .warn { background:#2a1f0e; border-color:#6b4a1c; color:#f0b775; }
+  }
   h2 { font-size:15px; margin:34px 0 10px; color:var(--dim); font-weight:600; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
   td { padding:7px 0; border-bottom:1px solid var(--line); vertical-align:top; }
@@ -251,10 +263,19 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
            color:var(--dim); font-size:12px; }
 </style>
 </head>
-<body>
+<body data-generated="__GENERATED_UNIX__" data-stale="__STALE__">
 <main>
   <h1>一言 Tile · 磁贴服务器</h1>
-  <p class="sub">Windows 10 / 11 桌面磁贴 · 每 15 分钟生成 · 数据来自 <a href="https://hitokoto.cn">hitokoto</a></p>
+  <p class="sub">Windows 10 / 11 桌面磁贴 · 期望每 __REFRESH__ 分钟生成一次 · 数据来自 <a href="https://hitokoto.cn">hitokoto</a></p>
+
+  <div class="warn" id="stale" hidden>
+    <b>这份磁贴快照已经过期。</b>
+    这里由 GitHub Actions 定时生成，而 GitHub 对 <code>schedule</code> 只是「尽力而为」：忙的时候会推迟，
+    甚至跳过大半天。Pages 是纯静态托管，自己不会更新，所以拿到的永远是上一次生成的副本。
+    想要稳定的 15 分钟刷新，可以让 Cloudflare Worker 定时触发这个工作流（见仓库 <code>cloudflare-worker/</code>），
+    或者直接用实时源 <a href="__WORKER__">Worker</a>（每次请求现取）。
+    App 检测到快照过期且 Worker 连不上时，会改为直连 v1.hitokoto.cn 自己生成磁贴，不会再卡住。
+  </div>
 
   <div class="quote" id="card">
     <p id="quote">__QUOTE__</p>
@@ -265,7 +286,8 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   <h2>磁贴地址</h2>
   <table>
     <tr><td>随机</td><td><code>__TILE__</code></td></tr>
-    <tr><td>生成时间</td><td>__TIME__</td></tr>
+    <tr><td>生成时间</td><td><span id="genLocal">__TIME__</span></td></tr>
+    <tr><td>内容年龄</td><td><span id="age">—</span>（超过 __STALE__ 分钟即视为过期）</td></tr>
     <tr><td>载荷</td><td>__BYTES__ 字节（上限 5 KB）</td></tr>
     <tr><td>自检</td><td><a href="health.json">health.json</a></td></tr>
   </table>
@@ -281,7 +303,8 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   </ol>
 
   <footer>
-    磁贴 XML 由 GitHub Actions 每 15 分钟生成一次；本页的一言是浏览器实时取的。
+    磁贴 XML 由 GitHub Actions 定时生成（GitHub 会推迟甚至跳过，最长可能几小时）；
+    本页的一言是浏览器实时取的。备用快照不可信时，App 会直连一言自己生成。
     · <a href="https://github.com/bzhcyy/OneSentenceTile">源码</a>
     · <a href="https://developer.hitokoto.cn/">一言 API</a>
   </footer>
@@ -307,6 +330,28 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
   }
   pull();
   setInterval(pull, 60000);
+
+  // 快照年龄：静态页自己算，别让人以为这是「刚刚生成」的
+  var gen = Number(document.body.getAttribute('data-generated')) * 1000;
+  var staleMin = parseInt(document.body.getAttribute('data-stale') || '45', 10);
+  function fmtAge(m) {
+    if (m < 1) return '刚刚';
+    if (m < 60) return m + ' 分钟';
+    var h = Math.floor(m / 60), r = m % 60;
+    return r ? (h + ' 小时 ' + r + ' 分') : (h + ' 小时');
+  }
+  function tickAge() {
+    if (!gen) return;
+    var m = Math.floor((Date.now() - gen) / 60000);
+    var age = document.getElementById('age');
+    if (age) age.textContent = '已 ' + fmtAge(m);
+    var local = document.getElementById('genLocal');
+    if (local) local.textContent = new Date(gen).toLocaleString('zh-CN');
+    var warn = document.getElementById('stale');
+    if (warn) warn.hidden = !(m > staleMin);
+  }
+  tickAge();
+  setInterval(tickAge, 30000);
 })();
 </script>
 </body>
@@ -315,17 +360,26 @@ INDEX_TEMPLATE = """<!DOCTYPE html>
 
 
 def build_index(health, variants, cfg):
+    stamp = str(health.get("generatedAtUnix") or 0)
+
+    def bust(url):
+        return url + ("&" if "?" in url else "?") + "v=" + stamp
+
     cats = []
     for v in variants:
         code = v["type"]
         name = TYPE_NAMES.get(code if code != "random" else "", code)
-        cats.append(f'<a href="{html.escape(v["file"])}">{html.escape(name)}</a>')
+        cats.append(f'<a href="{html.escape(bust(v["file"]))}">{html.escape(name)}</a>')
     return (INDEX_TEMPLATE
             .replace("__QUOTE__", html.escape(health.get("quote") or ""))
             .replace("__FROM__", html.escape(health.get("attribution") or ""))
             .replace("__TIME__", html.escape(health.get("generatedAt") or ""))
-            .replace("__TILE__", html.escape(health.get("tileUrl") or ""))
+            .replace("__TILE__", html.escape(bust(health.get("tileUrl") or "")))
             .replace("__BYTES__", str(health.get("payloadBytes") or 0))
+            .replace("__REFRESH__", str(health.get("refreshMinutes") or 15))
+            .replace("__STALE__", str(health.get("staleAfterMinutes") or 45))
+            .replace("__GENERATED_UNIX__", stamp)
+            .replace("__WORKER__", html.escape(cfg.get("workerUrl") or ""))
             .replace("__CATS__", "".join(cats)))
 
 
@@ -343,7 +397,6 @@ def main():
         print("error: 拿不到 baseUrl（--base-url / TILE_BASE_URL / config.json）", file=sys.stderr)
         return 2
 
-    now = datetime.datetime.now(datetime.timezone.utc)
     types = cfg.get("types") or [""]
     out_dir = pathlib.Path(args.out)
     if not args.out.startswith("/") and not pathlib.Path(args.out).is_absolute():
@@ -393,10 +446,16 @@ def main():
 
     (out_dir / ".nojekyll").write_text("", encoding="utf-8")
     first = variants[0]
+    # 时间戳放在最后取：取一言可能要几十秒，别让 generatedAt 比实际发布还早
+    now = datetime.datetime.now(datetime.timezone.utc)
     health = {
         "ok": True,
         "name": "一言 Tile 磁贴服务器",
         "generatedAt": now.isoformat().replace("+00:00", "Z"),
+        # 客户端（App）靠这几个字段判断「这份快照还能不能信」
+        "generatedAtUnix": int(now.timestamp()),
+        "refreshMinutes": int(cfg.get("refreshMinutes", 15)),
+        "staleAfterMinutes": int(cfg.get("staleAfterMinutes", 45)),
         "baseUrl": base_url,
         "tileUrl": first["url"],
         "payloadBytes": first["bytes"],
