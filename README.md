@@ -71,6 +71,8 @@ Windows 10 / 11 桌面磁贴：每小时给你一句「一言」。
 3. 依赖框架 → `Dependencies\x64\*.appx`
 4. 主程序包 → `Add-AppxPackage`
 
+> 1.3.36 起包标识改为 `KienSticn.OneSentenceTile2`。如果装过旧版，请先在「设置 → 应用」里卸载旧版；旧标识的激活注册一旦损坏，会出现 `0x80270254`，重装同一标识也没用。
+
 手动等价操作：
 
 ```powershell
@@ -91,6 +93,7 @@ powershell -ExecutionPolicy Bypass -File .\install-app.ps1 -Register
 | 报错 | 原因 | 处理 |
 |---|---|---|
 | `0x80073CF3` 找不到框架 | 依赖没装 | 先装 `Dependencies\<arch>\*.appx` |
+| `0x80270254` 点了没反应 | 旧包标识的激活注册损坏（重装同标识无效） | 卸载旧版，安装 1.3.36+（包标识已改为 `KienSticn.OneSentenceTile2`） |
 | 证书缺少基本约束扩展 | 证书装进了「受信任的根」 | 改装「受信任人」 |
 | `APPX0107` 签名无效 | 用了 CA 证书签名 | 用 `-Type CodeSigningCert` 的证书 |
 
@@ -101,7 +104,7 @@ powershell -ExecutionPolicy Bypass -File .\install-app.ps1 -Register
 打 Release：推 `v*` tag。
 
 ```bash
-git tag v1.3.35 && git push origin v1.3.35
+git tag v1.3.36 && git push origin v1.3.36
 ```
 
 本地构建（需 VS 2022 + UWP 工作负载）：
@@ -127,7 +130,7 @@ powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release 
 OneSentenceTile/        UWP 应用
   MainPage.xaml(.cs)    主界面 + 设置面板
   TileSource.cs         双源探测、样式/对齐参数
-  Package.appxmanifest  清单（Identity KienSticn.OneSentenceTile）
+  Package.appxmanifest  清单（Identity KienSticn.OneSentenceTile2）
 tile/                   磁贴静态站生成器
   gen_tile.py           生成 tile.xml / 13 个分类 / index.html / health.json
   config.json           标题、样式、对齐默认值

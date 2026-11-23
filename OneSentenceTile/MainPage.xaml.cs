@@ -308,14 +308,6 @@ namespace OneSentenceTile
         }
 
 
-        /// <summary>标题统一带上全角冒号，让“每日一言：”后面直接接正文更美观。</summary>
-        private static string NormalizeTitle(string title)
-        {
-            var t = (title ?? "").Trim();
-            if (t.Length == 0) return DailyTitleWithColon;
-            return t == DailyTitle ? DailyTitleWithColon : t;
-        }
-
         /// <summary>判断一段文字是不是标题（兼容带冒号和不带冒号两种）。</summary>
         private static bool IsTitleText(string text)
         {
@@ -342,14 +334,14 @@ namespace OneSentenceTile
 
                 if (texts.Count >= 3)
                 {
-                    title = NormalizeTitle(texts[0]);
+                    title = texts[0];
                     quote = texts[1];
                     attr = texts[2];
                 }
                 else if (texts.Count == 2)
                 {
-                    // 没出处：判断第一段是不是标题
-                    if (IsTitleText(texts[0])) { title = NormalizeTitle(texts[0]); quote = texts[1]; }
+                    // 没出处：判断第一段是不是标题（Worker / Pages 已直接返回「每日一言：」）
+                    if (IsTitleText(texts[0])) { title = texts[0]; quote = texts[1]; }
                     else { quote = texts[0]; attr = texts[1]; }
                 }
                 else if (texts.Count == 1)
