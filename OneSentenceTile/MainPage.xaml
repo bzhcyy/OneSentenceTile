@@ -293,7 +293,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Name="headerText"
-                               Text="每日一言"
+                               Text="每日一言："
                                Grid.Row="0"
                                HorizontalAlignment="Center"
                                TextAlignment="Center"

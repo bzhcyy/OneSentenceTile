@@ -25,6 +25,9 @@ namespace OneSentenceTile
         private readonly List<StorageFile> _wallFiles = new List<StorageFile>();
         private int _wallIndex;
 
+        private const string DailyTitle = "每日一言";            //标题文字（界面和磁贴共用）
+        private const string DailyTitleWithColon = DailyTitle + "："; //标题统一带全角冒号
+
         public MainPage()
         {
             this.InitializeComponent();
@@ -305,10 +308,25 @@ namespace OneSentenceTile
         }
 
 
+        /// <summary>标题统一带上全角冒号，让“每日一言：”后面直接接正文更美观。</summary>
+        private static string NormalizeTitle(string title)
+        {
+            var t = (title ?? "").Trim();
+            if (t.Length == 0) return DailyTitleWithColon;
+            return t == DailyTitle ? DailyTitleWithColon : t;
+        }
+
+        /// <summary>判断一段文字是不是标题（兼容带冒号和不带冒号两种）。</summary>
+        private static bool IsTitleText(string text)
+        {
+            var t = (text ?? "").Trim();
+            return t == DailyTitle || t == DailyTitleWithColon;
+        }
+
         /// <summary>把服务器给的文字重新排成磁贴 XML（字号/对齐/开关全部按设置来）。</summary>
         private string RebuildTileXml(string remoteXml)
         {
-            string title = "每日一言";
+            string title = DailyTitleWithColon;
             string quote = "";
             string attr = "";
 
@@ -324,14 +342,14 @@ namespace OneSentenceTile
 
                 if (texts.Count >= 3)
                 {
-                    title = texts[0];
+                    title = NormalizeTitle(texts[0]);
                     quote = texts[1];
                     attr = texts[2];
                 }
                 else if (texts.Count == 2)
                 {
                     // 没出处：判断第一段是不是标题
-                    if (texts[0] == "每日一言") { title = texts[0]; quote = texts[1]; }
+                    if (IsTitleText(texts[0])) { title = NormalizeTitle(texts[0]); quote = texts[1]; }
                     else { quote = texts[0]; attr = texts[1]; }
                 }
                 else if (texts.Count == 1)
@@ -363,7 +381,7 @@ namespace OneSentenceTile
 
             var sb = new System.Text.StringBuilder();
             sb.Append("<?xml version=\"1.0\" encoding=\"utf-8\"?><tile><visual version=\"2\">");
-            sb.Append("<binding template=\"TileSmall\">").Append(Text("caption", "每日一言", "", 0)).Append("</binding>");
+            sb.Append("<binding template=\"TileSmall\">").Append(Text("caption", DailyTitleWithColon, "", 0)).Append("</binding>");
             sb.Append("<binding template=\"TileMedium\">").Append(Text(qStyle, indent + quote, "", 0)).Append("</binding>");
             sb.Append("<binding template=\"TileWide\">");
             if (TileSource.ShowTitle) sb.Append(Text(tStyle, title, tAlign, 0));
@@ -438,7 +456,7 @@ namespace OneSentenceTile
                         ? new List<string>()
                         : large.Elements("text").Select(x => x.Value).ToList();
 
-                    var body = texts.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && x.Trim() != "每日一言");
+                    var body = texts.FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && !IsTitleText(x));
                     var from = texts.LastOrDefault();
 
                     dailyQuoteText.Text = string.IsNullOrWhiteSpace(body) ? "（暂时取不到每日一言）" : body.Trim();

@@ -7,7 +7,7 @@
     _site/tile-a.xml … l.xml 各个分类（App 会按分类换文件名）
 
 排版：
-    每日一言                      ← subheader（34px，大且粗）
+    每日一言：                    ← subheader（34px，大且粗）
     　　正文……                    ← subtitle（20px），首行缩进两个全角空格
     　　　　　　—— 作者《出处》     ← baseSubtle（15px），右对齐
 """
@@ -26,7 +26,7 @@ OUT_NAME = "tile"
 
 DEFAULTS = {
     "baseUrl": "",
-    "title": "每日一言",
+    "title": "每日一言：",
     "quotePrefix": "",
     "showAttribution": True,
     "attributionSep": " —— ",
@@ -83,6 +83,14 @@ def esc(value):
             .replace('"', "&quot;").replace("'", "&apos;"))
 
 
+def normalize_title(title):
+    """标题统一写成「每日一言：」，自定义标题原样保留。"""
+    t = (title or "").strip()
+    if not t:
+        return "每日一言："
+    return "每日一言：" if t == "每日一言" else t
+
+
 def clip(text, limit):
     """按句末标点优先截断，避免折行把标点甩到行首。"""
     if not limit or len(text) <= limit:
@@ -134,7 +142,7 @@ def attribution(item, cfg):
 
 # ------------------------------------------------------------------ 磁贴 XML
 def build_xml(base_url, item, cfg, type_code=""):
-    title = (cfg.get("title") or "").strip()
+    title = normalize_title(cfg.get("title"))
     prefix = cfg.get("quotePrefix") or ""
     indent = cfg.get("indent") or ""
 
