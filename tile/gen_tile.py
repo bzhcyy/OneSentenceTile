@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """一言 Tile 磁贴服务器 · 静态站生成器
 
@@ -47,7 +47,7 @@ DEFAULTS = {
     "titleAlign": "left",
     "attrAlign": "right",
     "titleStyle": "title",
-    "quoteStyle": "base",
+    "quoteStyle": "body",
     "attrStyle": "captionSubtle",
 }
 

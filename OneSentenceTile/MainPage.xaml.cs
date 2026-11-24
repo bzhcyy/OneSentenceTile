@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -56,11 +56,11 @@ namespace OneSentenceTile
 
             if (rev < 5)
             {
-                // 默认：标题靠左、出处靠右、标题特大34、正文中20、出处小15
+                // 默认：标题大24、正文小15、出处极小淡12；标题靠左、出处靠右
                 SetString("tileTitleAlign", "left");
                 SetString("tileAttrAlign", "right");
                 SetString("tileTitleStyle", "title");
-                SetString("tileQuoteStyle", "base");
+                SetString("tileQuoteStyle", "body");
                 SetString("tileAttrStyle", "captionSubtle");
                 SetBool("tileOn", true);
                 SetBool("tileShowTitle", true);
@@ -292,7 +292,7 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 按设置里选中的磁贴源依次尝试，谁先拿到内容就推谁：
+        /// 按固定优先级依次尝试，谁先拿到内容就推谁：
         ///   官方一言 → Worker → Pages
         ///   Worker   → Pages  → 官方一言
         ///   Pages    → 官方一言 → Worker（Pages 快照停更时直接跳过，别推几小时前的旧内容）
@@ -345,17 +345,9 @@ namespace OneSentenceTile
             return ok;
         }
 
-        /// <summary>选中的源排第一，后面按「官方 → Worker → Pages」的固定顺序兜底。</summary>
+        /// <summary>固定优先级：官方一言 API → Cloudflare Worker → GitHub Pages。</summary>
         private static IEnumerable<string> SourceOrder(string mode)
         {
-            if (mode == TileSource.Mode.Pages)
-            {
-                return new[] { TileSource.Mode.Pages, TileSource.Mode.Hitokoto, TileSource.Mode.Worker };
-            }
-            if (mode == TileSource.Mode.Worker)
-            {
-                return new[] { TileSource.Mode.Worker, TileSource.Mode.Pages, TileSource.Mode.Hitokoto };
-            }
             return new[] { TileSource.Mode.Hitokoto, TileSource.Mode.Worker, TileSource.Mode.Pages };
         }
 
@@ -565,7 +557,7 @@ namespace OneSentenceTile
         // ------------------------------------------------------------ 每日一言
         private async Task LoadDailyQuoteAsync()
         {
-            // 和磁贴同一套顺序：选中的源优先，取不到再依次换，Pages 停更时跳过
+            // 和磁贴同一套固定优先级：官方 API → Worker → Pages；Pages 停更时跳过
             foreach (var step in SourceOrder(TileSource.SelectedMode))
             {
                 if (step == TileSource.Mode.Pages)

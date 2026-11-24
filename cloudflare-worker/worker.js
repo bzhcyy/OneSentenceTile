@@ -1,4 +1,4 @@
-/**
+﻿/**
  * +1s 磁贴服务器（Cloudflare Worker 版）
  *
  * 直接输出 Windows 磁贴 XML，不需要 Pages / 定时任务：
@@ -160,18 +160,18 @@ function buildTileXml(item, opt) {
   const body = CONFIG.indent + CONFIG.quotePrefix + clip(item.text, CONFIG.clipLarge);
   const attr = attribution(item).trim();
 
-  const sTitle = pickStyle(opt.titleStyle, "subheader");
-  const sQuote = pickStyle(opt.quoteStyle, "subtitle");
-  const sAttr = pickStyle(opt.attrStyle, "baseSubtle");
+  const sTitle = pickStyle(opt.titleStyle, "title");
+  const sQuote = pickStyle(opt.quoteStyle, "body");
+  const sAttr = pickStyle(opt.attrStyle, "captionSubtle");
   const showTitle = opt.showTitle;
   const showAttr = opt.showAttr && attr.length > 0;
   const titleAlign = alignOf(opt.titleAlign, "left");
   const attrAlign = alignOf(opt.attrAlign, "right");
 
   const small = '<text hint-style="caption">' + esc(CONFIG.smallText) + '</text>';
-  const medium = '<text hint-style="captionSubtle" hint-wrap="true">'
+  const medium = '<text hint-style="body" hint-wrap="true">'
     + esc(CONFIG.indent + CONFIG.quotePrefix + clip(item.text, CONFIG.clipMedium)) + '</text>';
-  const wide = (showTitle ? '<text hint-style="base" hint-align="' + titleAlign + '">' + esc(CONFIG.title) + '</text>' : '')
+  const wide = (showTitle ? '<text hint-style="title" hint-align="' + titleAlign + '">' + esc(CONFIG.title) + '</text>' : '')
     + '<text hint-style="' + sQuote + '" hint-wrap="true">'
     + esc(CONFIG.indent + CONFIG.quotePrefix + clip(item.text, CONFIG.clipWide)) + '</text>'
     + (showAttr ? '<text hint-style="captionSubtle" hint-align="' + attrAlign + '" hint-wrap="true">' + esc(attr) + '</text>' : '');

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -152,7 +152,7 @@ namespace OneSentenceTile
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine("注册系统磁贴周期更新失败：" + ex);
-                // 启动不应因此失败；清单中的 TileUpdate 地址仍可作为系统备用源。
+                // 启动不应因此失败；清单中的 Pages TileUpdate 地址仍可作为首次启动前的系统备用源。
             }
         }
 

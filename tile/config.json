@@ -1,4 +1,4 @@
-{
+﻿{
   "baseUrl": "https://bzhcyy.github.io/OneSentenceTile",
   "title": "每日一言：",
   "quotePrefix": "",
@@ -26,7 +26,7 @@
   "clipLarge": 200,
   "maxPayloadBytes": 4600,
   "titleStyle": "title",
-  "quoteStyle": "base",
+  "quoteStyle": "body",
   "attrStyle": "captionSubtle",
   "showTitle": true,
   "showAttr": true,

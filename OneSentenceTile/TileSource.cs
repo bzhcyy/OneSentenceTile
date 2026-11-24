@@ -119,13 +119,14 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 给系统「周期更新」用的地址：只能吃现成的 XML，官方 API 返回的是 JSON，
-        /// 所以官方一言模式下用 Worker 实时 XML 顶住，连不上再退 Pages。
+        /// 给 Windows 系统「周期更新」选择 XML 地址。官方 API 返回 JSON，
+        /// 系统无法直接解析，因此应用关闭时按 Worker → Pages 的顺序回退。
+        /// 官方 API 仍是应用运行时的第一优先级。
         /// </summary>
         public static async Task<Uri> ResolveAsync()
         {
-            string first = SelectedMode == Mode.Pages ? Pages : Worker;
-            string second = SelectedMode == Mode.Pages ? Worker : Pages;
+            string first = Worker;
+            string second = Pages;
 
             if (await ProbeAsync(WithType(first)))
             {
@@ -137,7 +138,7 @@ namespace OneSentenceTile
             }
             else
             {
-                _picked = first;
+                _picked = second; // 两个 XML 源都探测失败时保留 Pages 作为系统重试地址
             }
 
             // 静态托管走 CDN（10 分钟）、磁贴又被系统按 URL 缓存，所以挂个时间戳；

@@ -1,4 +1,4 @@
-# 一言 Tile
+﻿# 一言 Tile
 
 Windows 10 / 11 桌面磁贴：每小时给你一句「一言」。
 
@@ -125,8 +125,7 @@ powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release 
 | Worker 实时源 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取，缓存 60 秒；`?type=d` 指定分类 |
 | Pages 快照源 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | GitHub Actions 生成的静态快照；分类为 `tile-a…l.xml`；首页/健康见 `health.json` |
 
-选中的源取不到就按顺序换下一个：官方一言 → Worker → Pages；Worker → Pages → 官方一言；
-Pages → 官方一言 → Worker。Pages 快照超过 45 分钟没更新时直接跳过，不推旧内容。
+应用运行时固定按官方一言 API → Cloudflare Worker → GitHub Pages 的顺序尝试；前一个不可用才切换下一个。Pages 快照超过 45 分钟没更新时直接跳过，不推旧内容。Windows 在应用关闭后只能请求 XML，因此后台周期更新固定按 Worker → Pages 回退，无法直接请求返回 JSON 的官方 API。
 
 两端生成的 XML 结构一致：`TileSmall / TileMedium / TileWide / TileLarge` 四个绑定，标题/正文/出处分别用 `hint-style` + `hint-align` 控制。
 
@@ -182,3 +181,8 @@ docs/                   截图（README 用）
 ## 许可
 
 GPL-3.0，继承自 [chenxuuu/add-one-second-UWP](https://github.com/chenxuuu/add-one-second-UWP)。
+
+
+### 默认磁贴字号
+
+新安装默认排版：标题「大 24」（`title`）、正文「小 15」（`body`）、出处「极小·淡 12」（`captionSubtle`）。Pages 生成配置、Cloudflare Worker 无参数默认值和应用首次启动默认值保持一致。更新 GitHub Pages 需要推送仓库并等待 `tile-pages.yml` 部署完成；更新 Worker 需要重新部署 `cloudflare-worker/worker.js`。
