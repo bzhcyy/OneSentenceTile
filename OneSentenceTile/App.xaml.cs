@@ -87,20 +87,67 @@ namespace OneSentenceTile
         /// </summary>
         private async void ConfigureTileSource()
         {
+            var updater = TileUpdateManager.CreateTileUpdaterForApplication();
             try
             {
-                // 用户关掉了动态磁贴：别在启动时又把周期更新打开
-                var tileOn = ApplicationData.Current.RoamingSettings.Values["tileOn"];
-                if (tileOn != null && !(bool)tileOn) return;
+                var values = ApplicationData.Current.RoamingSettings.Values;
 
+                // 启动时先清除上一次注册，避免旧的周期任务覆盖当前设置。
+                try { updater.StopPeriodicUpdate(); } catch { }
+
+                // 未设置时沿用应用默认开启；明确关闭时，不再注册后台更新。
+                var tileOn = values["tileOn"];
+                if (tileOn != null && !(bool)tileOn)
+                {
+                    System.Diagnostics.Debug.WriteLine("动态磁贴已关闭，跳过周期更新注册。");
+                    return;
+                }
+
+                // 必须读取用户实际选择的间隔，不能每次启动都强制改成 30 分钟。
+                var interval = values["tileInterval"] as string ?? "Realtime";
+                Windows.UI.Notifications.PeriodicUpdateRecurrence recurrence;
+                switch (interval)
+                {
+                    case "QuarterHour":
+                    case "HalfHour":
+                        // Windows 磁贴周期更新的最短系统间隔为 30 分钟。
+                        recurrence = PeriodicUpdateRecurrence.HalfHour;
+                        break;
+                    case "Hour":
+                        recurrence = PeriodicUpdateRecurrence.Hour;
+                        break;
+                    case "SixHours":
+                        recurrence = PeriodicUpdateRecurrence.SixHours;
+                        break;
+                    case "TwelveHours":
+                        recurrence = PeriodicUpdateRecurrence.TwelveHours;
+                        break;
+                    case "Daily":
+                        recurrence = PeriodicUpdateRecurrence.Daily;
+                        break;
+                    default:
+                        // 实时模式只在应用运行时刷新，不注册关闭应用后的周期更新。
+                        System.Diagnostics.Debug.WriteLine("磁贴处于实时模式，不注册系统周期更新。");
+                        return;
+                }
+
+                // 系统周期更新必须使用可直接返回 Tile XML 的 HTTPS 地址。
+                // ResolveAsync 会按用户选择的源探测 Worker / Pages，并附加样式参数。
                 var uri = await TileSource.ResolveAsync();
-                var updater = Windows.UI.Notifications.TileUpdateManager.CreateTileUpdaterForApplication();
-                updater.StartPeriodicUpdate(uri, Windows.UI.Notifications.PeriodicUpdateRecurrence.HalfHour);
-                System.Diagnostics.Debug.WriteLine("磁贴源: " + uri);
+
+                // 防止异步探测期间用户关闭磁贴或更改刷新间隔。
+                values = ApplicationData.Current.RoamingSettings.Values;
+                var currentTileOn = values["tileOn"];
+                if (currentTileOn != null && !(bool)currentTileOn) return;
+                if ((values["tileInterval"] as string ?? "Realtime") != interval) return;
+
+                updater.StartPeriodicUpdate(uri, recurrence);
+                System.Diagnostics.Debug.WriteLine("已注册系统磁贴周期更新：" + interval + "；源：" + uri);
             }
-            catch
+            catch (Exception ex)
             {
-                // 探测失败不影响启动，磁贴继续用清单里的默认地址
+                System.Diagnostics.Debug.WriteLine("注册系统磁贴周期更新失败：" + ex);
+                // 启动不应因此失败；清单中的 TileUpdate 地址仍可作为系统备用源。
             }
         }
 

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10" xmlns:mp="http://schemas.microsoft.com/appx/2014/phone/manifest" xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10" IgnorableNamespaces="uap mp">
   <Identity Name="KienSticn.OneSentenceTile2" Publisher="CN=KienSticn" Version="1.3.38.0" />
   <mp:PhoneIdentity PhoneProductId="a566d2ec-3a82-45ec-83ad-771a03c8e7dc" PhonePublisherId="00000000-0000-0000-0000-000000000000" />
@@ -17,7 +17,7 @@
     <Application Id="App" Executable="$targetnametoken$.exe" EntryPoint="OneSentenceTile.App">
       <uap:VisualElements DisplayName="一言 Tile" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" Description="一言 Tile：桌面磁贴显示一言（hitokoto）" BackgroundColor="transparent">
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" Square71x71Logo="Assets\Square71x71Logo.png">
-          <uap:TileUpdate Recurrence="halfHour" UriTemplate="https://bzhcyy.github.io/OneSentenceTile/tile.xml" />
+          <uap:TileUpdate Recurrence="halfHour" UriTemplate="https://onesentencetile.onesentencetile.workers.dev/tile.xml" />
           <!-- 去掉 ShowNameOnTiles：磁贴底部不再显示 “+1s”，把空间留给语录；标题由磁贴 XML 的 branding 控制 -->
         </uap:DefaultTile>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
