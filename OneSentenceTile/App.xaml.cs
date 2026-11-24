@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -105,10 +105,15 @@ namespace OneSentenceTile
 
                 // 必须读取用户实际选择的间隔，不能每次启动都强制改成 30 分钟。
                 var interval = values["tileInterval"] as string ?? "Realtime";
+                // 旧版本可能保存了已移除的 15 分钟选项，统一迁移到 30 分钟。
+                if (interval == "QuarterHour")
+                {
+                    interval = "HalfHour";
+                    values["tileInterval"] = interval;
+                }
                 Windows.UI.Notifications.PeriodicUpdateRecurrence recurrence;
                 switch (interval)
                 {
-                    case "QuarterHour":
                     case "HalfHour":
                         // Windows 磁贴周期更新的最短系统间隔为 30 分钟。
                         recurrence = PeriodicUpdateRecurrence.HalfHour;

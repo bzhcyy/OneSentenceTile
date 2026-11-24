@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -184,15 +184,23 @@ namespace OneSentenceTile
         /// <summary>刷新间隔：Realtime = App 现拉现推；其余走系统周期更新。</summary>
         private string TileIntervalTag
         {
-            get { return GetString("tileInterval", "Realtime"); }
+            get
+            {
+                var value = GetString("tileInterval", "Realtime");
+                // 兼容旧版本保存的 15 分钟设置：迁移为系统支持的最短周期 30 分钟。
+                if (value == "QuarterHour")
+                {
+                    SetString("tileInterval", "HalfHour");
+                    return "HalfHour";
+                }
+                return value;
+            }
             set { SetString("tileInterval", value); }
         }
 
         private static readonly Dictionary<string, PeriodicUpdateRecurrence> IntervalMap =
             new Dictionary<string, PeriodicUpdateRecurrence>
             {
-                // Windows 的周期更新最短只有 30 分钟；15 分钟这一档由 App 自己的定时器补上
-                { "QuarterHour", PeriodicUpdateRecurrence.HalfHour },
                 { "HalfHour", PeriodicUpdateRecurrence.HalfHour },
                 { "Hour", PeriodicUpdateRecurrence.Hour },
                 { "SixHours", PeriodicUpdateRecurrence.SixHours },
@@ -204,7 +212,6 @@ namespace OneSentenceTile
         {
             switch (tag)
             {
-                case "QuarterHour": return 15;
                 case "HalfHour": return 30;
                 case "Hour": return 60;
                 case "SixHours": return 360;

@@ -1,4 +1,4 @@
-﻿<Page
+<Page
     x:Class="OneSentenceTile.MainPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -53,8 +53,7 @@
                             <TextBlock Text="刷新间隔" Style="{StaticResource Label}"/>
                             <ComboBox Name="tileIntervalCombo" Style="{StaticResource Combo}"
                                       SelectionChanged="tileIntervalCombo_SelectionChanged">
-                                <ComboBoxItem Content="实时（打开就刷新）" Tag="Realtime"/>
-                                <ComboBoxItem Content="15 分钟" Tag="QuarterHour"/>
+                                <ComboBoxItem Content="实时" Tag="Realtime"/>
                                 <ComboBoxItem Content="30 分钟" Tag="HalfHour"/>
                                 <ComboBoxItem Content="1 小时" Tag="Hour"/>
                                 <ComboBoxItem Content="6 小时" Tag="SixHours"/>
