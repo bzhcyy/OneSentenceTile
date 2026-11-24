@@ -8,8 +8,8 @@
 
 排版：
     每日一言：                    ← subheader（34px，大且粗）
-    　　正文……                    ← subtitle（20px），首行缩进两个全角空格
-    　　　　　　—— 作者《出处》     ← baseSubtle（15px），右对齐
+    　　正文……                    ← base（15px），首行缩进两个全角空格
+    　　　　　　—— 作者《出处》     ← captionSubtle（12px），右对齐
 """
 import argparse
 import datetime
@@ -47,7 +47,7 @@ DEFAULTS = {
     "titleAlign": "left",
     "attrAlign": "right",
     "titleStyle": "title",
-    "quoteStyle": "body",
+    "quoteStyle": "base",
     "attrStyle": "captionSubtle",
 }
 
@@ -167,10 +167,10 @@ def build_xml(base_url, item, cfg, type_code=""):
     a_align = cfg.get("attrAlign", "right")
 
     small = f'<text hint-style="caption">{esc(title)}</text>'
-    medium = text("captionSubtle", indent + prefix + item["text"], cfg["clipMedium"])
-    wide = (text("base", title, align=t_align) if show_title else "") \
-        + text("baseSubtle", indent + prefix + item["text"], cfg["clipWide"]) \
-        + (text("captionSubtle", attr, align=a_align) if show_attr else "")
+    medium = text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipMedium"])
+    wide = (text(cfg["titleStyle"], title, align=t_align) if show_title else "") \
+        + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipWide"]) \
+        + (text(cfg["attrStyle"], attr, align=a_align) if show_attr else "")
     large = (text(cfg["titleStyle"], title, align=t_align) if show_title else "") \
         + text(cfg["quoteStyle"], indent + prefix + item["text"], cfg["clipLarge"], max_lines=5) \
         + (text(cfg["attrStyle"], attr, align=a_align) if show_attr else "")

@@ -161,7 +161,7 @@ function buildTileXml(item, opt) {
   const attr = attribution(item).trim();
 
   const sTitle = pickStyle(opt.titleStyle, "title");
-  const sQuote = pickStyle(opt.quoteStyle, "body");
+  const sQuote = pickStyle(opt.quoteStyle, "base");
   const sAttr = pickStyle(opt.attrStyle, "captionSubtle");
   const showTitle = opt.showTitle;
   const showAttr = opt.showAttr && attr.length > 0;
@@ -169,12 +169,12 @@ function buildTileXml(item, opt) {
   const attrAlign = alignOf(opt.attrAlign, "right");
 
   const small = '<text hint-style="caption">' + esc(CONFIG.smallText) + '</text>';
-  const medium = '<text hint-style="body" hint-wrap="true">'
+  const medium = '<text hint-style="' + sQuote + '" hint-wrap="true">'
     + esc(CONFIG.indent + CONFIG.quotePrefix + clip(item.text, CONFIG.clipMedium)) + '</text>';
-  const wide = (showTitle ? '<text hint-style="title" hint-align="' + titleAlign + '">' + esc(CONFIG.title) + '</text>' : '')
+  const wide = (showTitle ? '<text hint-style="' + sTitle + '" hint-align="' + titleAlign + '">' + esc(CONFIG.title) + '</text>' : '')
     + '<text hint-style="' + sQuote + '" hint-wrap="true">'
     + esc(CONFIG.indent + CONFIG.quotePrefix + clip(item.text, CONFIG.clipWide)) + '</text>'
-    + (showAttr ? '<text hint-style="captionSubtle" hint-align="' + attrAlign + '" hint-wrap="true">' + esc(attr) + '</text>' : '');
+    + (showAttr ? '<text hint-style="' + sAttr + '" hint-align="' + attrAlign + '" hint-wrap="true">' + esc(attr) + '</text>' : '');
   const large = (showTitle ? '<text hint-style="' + sTitle + '" hint-align="' + titleAlign + '">' + esc(CONFIG.title) + '</text>' : '')
     + '<text hint-style="' + sQuote + '" hint-wrap="true" hint-maxLines="5">' + esc(body) + '</text>'
     + (showAttr ? '<text hint-style="' + sAttr + '" hint-align="' + attrAlign + '" hint-wrap="true">' + esc(attr) + '</text>' : '');

@@ -56,11 +56,11 @@ namespace OneSentenceTile
 
             if (rev < 5)
             {
-                // 默认：标题大24、正文小15、出处极小淡12；标题靠左、出处靠右
+                // 默认：标题大24、正文标准15、出处极小淡12；标题靠左、出处靠右
                 SetString("tileTitleAlign", "left");
                 SetString("tileAttrAlign", "right");
                 SetString("tileTitleStyle", "title");
-                SetString("tileQuoteStyle", "body");
+                SetString("tileQuoteStyle", "base");
                 SetString("tileAttrStyle", "captionSubtle");
                 SetBool("tileOn", true);
                 SetBool("tileShowTitle", true);
@@ -80,6 +80,15 @@ namespace OneSentenceTile
                 }
                 catch { }
                 rev = 6;
+            }
+
+            if (rev < 7)
+            {
+                // 修正旧版默认正文样式：body（小15）改为 base（标准15）。
+                // 只迁移旧默认值，不覆盖用户已选择的其他正文样式。
+                if (GetString("tileQuoteStyle", "base") == "body")
+                    SetString("tileQuoteStyle", "base");
+                rev = 7;
             }
 
             SetString("settingsRev", rev.ToString());

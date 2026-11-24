@@ -185,4 +185,4 @@ GPL-3.0，继承自 [chenxuuu/add-one-second-UWP](https://github.com/chenxuuu/ad
 
 ### 默认磁贴字号
 
-新安装默认排版：标题「大 24」（`title`）、正文「小 15」（`body`）、出处「极小·淡 12」（`captionSubtle`）。Pages 生成配置、Cloudflare Worker 无参数默认值和应用首次启动默认值保持一致。更新 GitHub Pages 需要推送仓库并等待 `tile-pages.yml` 部署完成；更新 Worker 需要重新部署 `cloudflare-worker/worker.js`。
+新安装默认排版：标题「大 24」（`title`）、正文「标准 15」（`base`）、出处「极小·淡 12」（`captionSubtle`）。Pages 生成配置、Cloudflare Worker 无参数默认值和应用首次启动默认值保持一致。更新 GitHub Pages 需要推送仓库并等待 `tile-pages.yml` 部署完成；更新 Worker 需要重新部署 `cloudflare-worker/worker.js`。
