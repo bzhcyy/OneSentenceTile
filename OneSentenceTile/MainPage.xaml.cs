@@ -248,7 +248,7 @@ namespace OneSentenceTile
             {
                 try { updater.StopPeriodicUpdate(); } catch { }
                 StopTileTimer();
-                UpdateTileStatus(false, false);
+                UpdateTileStatus("");
                 return;
             }
 
@@ -295,17 +295,13 @@ namespace OneSentenceTile
             var mode = TileSource.SelectedMode;
             var ok = false;
             var usedLabel = "";
-            var pagesStale = false;
 
             foreach (var step in SourceOrder(mode))
             {
                 if (step == TileSource.Mode.Pages)
                 {
-                    if (!await TileSource.PagesFreshAsync())
-                    {
-                        pagesStale = true;
-                        continue;
-                    }
+                    // Pages 是静态快照，停更时直接跳过，别推几小时前的旧内容
+                    if (!await TileSource.PagesFreshAsync()) continue;
                     if (await PushTileNowAsync(TileSource.PagesContentUri()))
                     {
                         ok = true;
@@ -338,7 +334,7 @@ namespace OneSentenceTile
             }
 
             UpdateAlignAvailability();
-            UpdateTileStatus(mode, usedLabel, pagesStale);
+            UpdateTileStatus(usedLabel);
             return ok;
         }
 
@@ -366,8 +362,8 @@ namespace OneSentenceTile
             tileAttrAlignCombo.IsEnabled = true;
         }
 
-        /// <summary>界面上说明「选的是哪个源、实际用了哪个、内容有多新」。</summary>
-        private void UpdateTileStatus(string mode, string usedLabel, bool pagesStale)
+        /// <summary>状态栏只说明实际用的是哪个源，不提示兜底过程。</summary>
+        private void UpdateTileStatus(string usedLabel)
         {
             if (tileStatusText == null) return;
             if (!isTileFresh.IsOn)
@@ -376,34 +372,8 @@ namespace OneSentenceTile
                 return;
             }
 
-            var text = "磁贴源：" + TileSource.ModeName(mode);
-            var age = TileSource.PagesAgeMinutes;
-            if (usedLabel == TileSource.ModeName(TileSource.Mode.Pages) && age >= 0)
-            {
-                text += "（快照 " + FormatAge(age) + "前生成）";
-            }
-
-            if (usedLabel.Length > 0 && usedLabel != TileSource.ModeName(mode))
-            {
-                text += "；已自动改用 " + usedLabel;
-            }
-            if (pagesStale)
-            {
-                text += "；Pages 快照停更，已跳过";
-            }
-            if (usedLabel.Length == 0)
-            {
-                text += "；三个源都取不到，磁贴沿用上一次的内容";
-            }
-            tileStatusText.Text = text;
-        }
-
-        private static string FormatAge(int minutes)
-        {
-            if (minutes < 60) return minutes + " 分钟";
-            var hours = minutes / 60;
-            var rest = minutes % 60;
-            return rest == 0 ? hours + " 小时" : hours + " 小时 " + rest + " 分";
+            var label = usedLabel.Length > 0 ? usedLabel : TileSource.ModeName(TileSource.SelectedMode);
+            tileStatusText.Text = "磁贴源：" + label;
         }
 
         private async Task<bool> PushTileNowAsync(Uri uri)

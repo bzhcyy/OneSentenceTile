@@ -86,12 +86,6 @@ namespace OneSentenceTile
             set { ApplicationData.Current.RoamingSettings.Values["tileStaleMinutes"] = value; }
         }
 
-        /// <summary>Pages 快照的年龄（分钟），-1 表示没读过/读不到 health.json。</summary>
-        public static int PagesAgeMinutes
-        {
-            get { return _pagesAgeMinutes; }
-        }
-
         /// <summary>
         /// 一言分类：空 = 随机，否则是 a~l 里的一个字母
         /// （a 动画 b 漫画 c 游戏 d 文学 e 原创 f 来自网络 g 其他 h 影视 i 诗词 k 哲学 l 抖机灵）。

@@ -150,7 +150,7 @@ Pages 是纯静态托管，自己不会刷新；`tile.xml` 只在 GitHub Actions
 1. **App 不再被骗**：选中 Pages 时读 `health.json` 的 `generatedAt`，超过 45 分钟就认为快照过期，
    这时直接跳过 Pages，按顺序改用**一言官方 API**（`v1.hitokoto.cn`，App 自己拼磁贴）或 **Worker** 实时源；
    都失败才沿用旧内容。Pages 请求一律带 `?v=时间戳`，绕开 GitHub Pages 的 10 分钟 CDN 缓存。
-   设置面板里会显示「磁贴源：Pages（快照 3 小时前生成）；Pages 快照停更，已跳过；已自动改用 官方一言」。
+   设置面板只显示实际用的源，例如「磁贴源：官方一言」，不提示跳过了谁。
 2. **看得见的新鲜度**：`health.json` 多了 `generatedAtUnix` / `refreshMinutes` / `staleAfterMinutes`，
    首页按本地时间显示生成时间、和「已 X 分钟」，超过阈值直接亮黄条；
    `tile/check_freshness.py` 可以随时查线上快照年龄（CI 每次部署前后都会跑）。

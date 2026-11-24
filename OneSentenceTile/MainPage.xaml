@@ -72,7 +72,7 @@
                                 <ComboBoxItem Content="Pages 快照源（github.io）" Tag="pages"/>
                             </ComboBox>
 
-                            <!-- 说明选的是哪个源、实际用了哪个、快照有多旧；Pages 停更时会显示已跳过 -->
+                            <!-- 只显示实际用的源，比如「磁贴源：官方一言」 -->
                             <TextBlock Name="tileStatusText"
                                        Text="磁贴源：未探测"
                                        FontSize="12"
