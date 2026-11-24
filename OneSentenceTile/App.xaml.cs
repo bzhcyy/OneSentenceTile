@@ -63,7 +63,7 @@ namespace OneSentenceTile
                 Window.Current.Content = rootFrame;
             }
 
-            // 每次启动都重新探一次：Worker 能连就用 Worker，连不上自动退回 Pages
+            // 每次启动都重新探一次：按设置里选中的源挑地址，连不上自动换另一个
             ConfigureTileSource();
 
             if (e.PrelaunchActivated == false)
@@ -81,9 +81,9 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 启动时决定磁贴用哪个服务器：优先 Worker，连不上自动退回 Pages；
-        /// Pages 快照过期（health.json 很久没更新）时 ResolveAsync 会自动改用 Worker。
-        /// 异步探测，不阻塞界面。
+        /// 启动时按设置里选中的磁贴源，给系统周期更新挑一个「现成 XML」地址：
+        /// 官方一言模式用 Worker 实时 XML 顶替（官方 API 是 JSON，系统拉不了），
+        /// 选 Pages 则用 Pages 快照，连不上都会自动退到另一个。异步探测，不阻塞界面。
         /// </summary>
         private async void ConfigureTileSource()
         {

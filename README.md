@@ -42,7 +42,7 @@ Windows 10 / 11 桌面磁贴：每小时给你一句「一言」。
 |---|---|
 | **分类** | 随机 / 动画 / 漫画 / 游戏 / 文学 / 原创 / 网络 / 其他 / 影视 / 诗词 / 网易云 / 哲学 / 抖机灵 |
 | **刷新** | 实时（现拉现推，默认）/ 15 分钟 / 30 分钟 / 1 / 6 / 12 / 24 小时；任何模式下改完都会立刻推一次 |
-| **双源** | Worker 优先，连不上自动退 Pages；Pages 快照过期时改用一言官方 API 直连，官方也取不到再用 Worker |
+| **三源** | 官方一言（`v1.hitokoto.cn`，默认）/ Worker 实时源 / Pages 静态快照，设置里三选一；选中的取不到就自动按下一个换，Pages 快照过期时直接跳过，不会停在几小时前那条 |
 | **磁贴文字** | 标题 / 正文 / 出处 各自字号、对齐（左/中/右）、显示开关；XML 由 App 本地重建，两源都生效 |
 | **界面文字** | 字体（含系统字体选择框 + 未知字体自动回退）、三段字号、加粗 |
 | **壁纸** | 关闭 / 本地图片 / 网络地址 / 文件夹轮播（1–60 分钟） |
@@ -53,7 +53,7 @@ Windows 10 / 11 桌面磁贴：每小时给你一句「一言」。
 | 项 | 默认值 |
 |---|---|
 | 动态磁贴 | 开 |
-| 磁贴源 | Worker 优先 |
+| 磁贴源 | 官方一言（v1.hitokoto.cn） |
 | 刷新间隔 | 实时 |
 | 标题 / 正文 / 出处 | 24 / 15 / 12 |
 | 对齐 | 标题靠左、出处靠右 |
@@ -117,10 +117,16 @@ powershell -ExecutionPolicy Bypass -File .\build-uwp.ps1 -Configuration Release 
 
 ## 磁贴服务器
 
-| | 地址 | 更新方式 |
+设置面板里「磁贴源」是个下拉框，三选一：
+
+| | 地址 | 特点 |
 |---|---|---|
-| 主 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取，缓存 60 秒；`?type=d` 指定分类 |
-| 备 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | GitHub Actions 生成静态快照；分类为 `tile-a…l.xml`；首页/健康见 `health.json` |
+| 官方一言（默认） | `https://v1.hitokoto.cn` | 直连 JSON，App 自己拼磁贴；国内一般可达，但系统「周期更新」只认 XML，所以 App 关掉后由 Worker 顶替 |
+| Worker 实时源 | `https://onesentencetile.onesentencetile.workers.dev/tile.xml` | 每次请求现取，缓存 60 秒；`?type=d` 指定分类 |
+| Pages 快照源 | `https://bzhcyy.github.io/OneSentenceTile/tile.xml` | GitHub Actions 生成的静态快照；分类为 `tile-a…l.xml`；首页/健康见 `health.json` |
+
+选中的源取不到就按顺序换下一个：官方一言 → Worker → Pages；Worker → Pages → 官方一言；
+Pages → 官方一言 → Worker。Pages 快照超过 45 分钟没更新时直接跳过，不推旧内容。
 
 两端生成的 XML 结构一致：`TileSmall / TileMedium / TileWide / TileLarge` 四个绑定，标题/正文/出处分别用 `hint-style` + `hint-align` 控制。
 
@@ -137,15 +143,14 @@ Pages 是纯静态托管，自己不会刷新；`tile.xml` 只在 GitHub Actions
 ```
 
 工作流里写的是 `cron: '*/15 * * * *'`，`health.json` 的 `generatedAt` 却经常是两三个小时前——
-所以选了「Pages 优先」、或者 Worker 连不上（`workers.dev` 在国内经常被墙）时，磁贴就会停在旧的那条。
+所以选了「Pages 快照源」、或者 Worker 连不上（`workers.dev` 在国内经常被墙）时，磁贴就会停在旧的那条。
 
 现在改的是 **Pages 这一侧**（Worker 完全不动，仍然是每次请求现取的实时源）：
 
 1. **App 不再被骗**：选中 Pages 时读 `health.json` 的 `generatedAt`，超过 45 分钟就认为快照过期，
-   这时不再推 Pages 的旧内容，而是先直连**一言官方 API**（`v1.hitokoto.cn`）自己拼磁贴；
-   官方也取不到，再退回 **Worker** 实时源；两条都失败才沿用旧内容。
-   Pages 请求一律带 `?v=时间戳`，绕开 GitHub Pages 的 10 分钟 CDN 缓存。
-   设置面板里会显示「磁贴源：Pages（快照 3 小时前生成）；快照停更，已改用一言官方 API」。
+   这时直接跳过 Pages，按顺序改用**一言官方 API**（`v1.hitokoto.cn`，App 自己拼磁贴）或 **Worker** 实时源；
+   都失败才沿用旧内容。Pages 请求一律带 `?v=时间戳`，绕开 GitHub Pages 的 10 分钟 CDN 缓存。
+   设置面板里会显示「磁贴源：Pages（快照 3 小时前生成）；Pages 快照停更，已跳过；已自动改用 官方一言」。
 2. **看得见的新鲜度**：`health.json` 多了 `generatedAtUnix` / `refreshMinutes` / `staleAfterMinutes`，
    首页按本地时间显示生成时间、和「已 X 分钟」，超过阈值直接亮黄条；
    `tile/check_freshness.py` 可以随时查线上快照年龄（CI 每次部署前后都会跑）。
@@ -163,7 +168,7 @@ Pages 是纯静态托管，自己不会刷新；`tile.xml` 只在 GitHub Actions
 ```
 OneSentenceTile/        UWP 应用
   MainPage.xaml(.cs)    主界面 + 设置面板
-  TileSource.cs         双源探测、快照新鲜度、样式/对齐参数
+  TileSource.cs         三源选择、兜底顺序、快照新鲜度、样式/对齐参数
   Package.appxmanifest  清单（Identity KienSticn.OneSentenceTile2）
 tile/                   磁贴静态站生成器
   gen_tile.py           生成 tile.xml / 13 个分类 / index.html / health.json

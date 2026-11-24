@@ -63,13 +63,16 @@
                             </ComboBox>
 
                             <Button Name="refreshTileButton" Content="立即刷新磁贴" Margin="0,6,0,0" Click="refreshTileButton_Click"/>
-                            <ToggleSwitch Name="isWorkerFirst"
-                                          OffContent="磁贴源：Pages 优先"
-                                          OnContent="磁贴源：Worker 优先"
-                                          Margin="0,-2"
-                                          Toggled="isWorkerFirst_Toggled"/>
 
-                            <!-- 说明当前用的源、快照有多旧；Pages 快照过期时会显示已直连一言 -->
+                            <TextBlock Text="磁贴源" Style="{StaticResource Label}"/>
+                            <ComboBox Name="tileSourceCombo" Style="{StaticResource Combo}"
+                                      SelectionChanged="tileSourceCombo_SelectionChanged">
+                                <ComboBoxItem Content="官方一言（v1.hitokoto.cn）" Tag="hitokoto"/>
+                                <ComboBoxItem Content="Worker 实时源（workers.dev）" Tag="worker"/>
+                                <ComboBoxItem Content="Pages 快照源（github.io）" Tag="pages"/>
+                            </ComboBox>
+
+                            <!-- 说明选的是哪个源、实际用了哪个、快照有多旧；Pages 停更时会显示已跳过 -->
                             <TextBlock Name="tileStatusText"
                                        Text="磁贴源：未探测"
                                        FontSize="12"

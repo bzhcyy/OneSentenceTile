@@ -9,8 +9,11 @@ using Windows.Storage;
 namespace OneSentenceTile
 {
     /// <summary>
-    /// 磁贴内容来源：Worker 和 Pages 两个，按用户设置决定优先用哪个，
-    /// 优先的那个连不上、或者内容已经过期，就自动换另一个。
+    /// 磁贴内容来源：官方一言 / Worker / Pages 三个，用户在设置里三选一，
+    /// 选中的那个取不到就按固定顺序换下一个。
+    ///
+    /// 官方一言：https://v1.hitokoto.cn  直连 JSON，App 自己拼磁贴；国内一般可达，
+    ///          但系统「周期更新」只认 XML 地址，所以 App 关掉后由 Worker 顶替。
     ///
     /// Worker：https://onesentencetile.onesentencetile.workers.dev/tile.xml
     ///         每次请求现取「每日一言」，永远新鲜；支持 ?type=x 选分类。
@@ -19,10 +22,9 @@ namespace OneSentenceTile
     ///         实测会被推迟到 4～9 小时才跑一次，所以这份快照经常是几小时前的。
     ///
     /// 判定方式：
-    ///   1. 真实 GET 一次，4 秒超时，内容里出现 &lt;tile 才算「连得上」；
+    ///   1. 真实 GET 一次，超时就算「连不上」，换下一个源；
     ///   2. 选中 Pages 时，再读一次 health.json 的 generatedAt：超过 StaleAfterMinutes
-    ///      就标记 PickedIsStale —— 由界面先改走一言官方 API，取不到再用 Worker 兜底，
-    ///      别让磁贴停在几小时前那条。
+    ///      就算快照停更，界面直接跳过它，别让磁贴停在几小时前那条。
     /// </summary>
     static class TileSource
     {
@@ -36,19 +38,41 @@ namespace OneSentenceTile
 
         private static string _picked;
         private static string _lastUri;
-        private static bool _pickedStale;
+        private static string _lastUriMode;
         private static int _pagesAgeMinutes = -1;
         private static DateTime _pagesAgeCheckedUtc = DateTime.MinValue;
 
-        /// <summary>true = Worker 优先；false = Pages 优先。存在 RoamingSettings 里。</summary>
-        public static bool PreferWorker
+        /// <summary>磁贴源三选一，存在 RoamingSettings 的 tileSource 里。</summary>
+        public static class Mode
+        {
+            public const string Hitokoto = "hitokoto";
+            public const string Worker = "worker";
+            public const string Pages = "pages";
+        }
+
+        /// <summary>当前选中的磁贴源：hitokoto（官方一言，默认）/ worker / pages。</summary>
+        public static string SelectedMode
         {
             get
             {
-                var v = ApplicationData.Current.RoamingSettings.Values["preferWorker"];
-                return v == null ? true : (bool)v;
+                var v = ApplicationData.Current.RoamingSettings.Values["tileSource"] as string;
+                if (v == Mode.Worker) return Mode.Worker;
+                if (v == Mode.Pages) return Mode.Pages;
+                return Mode.Hitokoto;
             }
-            set { ApplicationData.Current.RoamingSettings.Values["preferWorker"] = value; }
+            set
+            {
+                ApplicationData.Current.RoamingSettings.Values["tileSource"] =
+                    (value == Mode.Worker || value == Mode.Pages) ? value : Mode.Hitokoto;
+            }
+        }
+
+        /// <summary>界面上显示的名称，和设置里下拉框的文字对应。</summary>
+        public static string ModeName(string mode)
+        {
+            if (mode == Mode.Worker) return "Worker";
+            if (mode == Mode.Pages) return "Pages";
+            return "官方一言";
         }
 
         /// <summary>Pages 快照超过多少分钟算过期（默认 45）。</summary>
@@ -62,26 +86,10 @@ namespace OneSentenceTile
             set { ApplicationData.Current.RoamingSettings.Values["tileStaleMinutes"] = value; }
         }
 
-        /// <summary>这次解析出来的 Pages 快照是否已经过期（过期时界面会直连一言兜底）。</summary>
-        public static bool PickedIsStale
-        {
-            get { return _pickedStale; }
-        }
-
         /// <summary>Pages 快照的年龄（分钟），-1 表示没读过/读不到 health.json。</summary>
         public static int PagesAgeMinutes
         {
             get { return _pagesAgeMinutes; }
-        }
-
-        /// <summary>当前选中的源，给界面显示用。</summary>
-        public static string SourceLabel
-        {
-            get
-            {
-                if (_picked == null) return "未探测";
-                return _picked == Pages ? "Pages" : "Worker";
-            }
         }
 
         /// <summary>
@@ -117,16 +125,13 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 按设置的优先级挑一个能连上的地址；两个都不通时返回优先的那个。
-        /// 挑中的是 Pages 时顺带判断快照是否过期（结果放在 PickedIsStale 里，
-        /// 由界面决定是否走「官方 API → Worker」的兜底）。
+        /// 给系统「周期更新」用的地址：只能吃现成的 XML，官方 API 返回的是 JSON，
+        /// 所以官方一言模式下用 Worker 实时 XML 顶住，连不上再退 Pages。
         /// </summary>
         public static async Task<Uri> ResolveAsync()
         {
-            string first = PreferWorker ? Worker : Pages;
-            string second = PreferWorker ? Pages : Worker;
-
-            _pickedStale = false;
+            string first = SelectedMode == Mode.Pages ? Pages : Worker;
+            string second = SelectedMode == Mode.Pages ? Worker : Pages;
 
             if (await ProbeAsync(WithType(first)))
             {
@@ -141,30 +146,31 @@ namespace OneSentenceTile
                 _picked = first;
             }
 
-            // 选中 Pages 时看一眼快照年龄：静态托管自己不会刷新，
-            // GitHub 的 cron 又经常被推迟，所以「连得上」不等于「内容是新的」。
-            // 过期后不在这里换源，交给界面按「一言官方 API → Worker」的顺序兜底；
-            // Worker 保持原样，仍然是每次请求现取的实时源。
-            if (_picked == Pages)
-            {
-                int age = await PagesAgeMinutesAsync();
-                _pickedStale = age > StaleAfterMinutes;
-            }
-
+            // 静态托管走 CDN（10 分钟）、磁贴又被系统按 URL 缓存，所以挂个时间戳；
+            // Pages 快照是否过期由界面用 PagesFreshAsync 另行判断，这里只管地址。
             _lastUri = WithStyle(WithCacheBust(WithType(_picked)));
+            _lastUriMode = SelectedMode;
             return new Uri(_lastUri);
         }
 
-        /// <summary>上一次 ResolveAsync 选出来的地址，避免同一次刷新里重复探测。</summary>
-        public static Uri LastResolvedUri
+        /// <summary>
+        /// Pages 快照还算不算新鲜：health.json 读不到时按「新鲜」处理，
+        /// 别因为读不到健康信息就把好好的备用源也跳过了。
+        /// </summary>
+        public static async Task<bool> PagesFreshAsync()
         {
-            get { return _lastUri == null ? null : new Uri(_lastUri); }
+            int age = await PagesAgeMinutesAsync();
+            return age < 0 || age <= StaleAfterMinutes;
         }
 
-        /// <summary>当前选中的地址（没解析过就是 null），便于日志/界面显示。</summary>
-        public static string PickedUrl
+        /// <summary>上一次 ResolveAsync 选出来的地址；换了磁贴源就当没解析过，重探一次。</summary>
+        public static Uri LastResolvedUri
         {
-            get { return _picked == null ? null : WithStyle(WithCacheBust(WithType(_picked))); }
+            get
+            {
+                if (_lastUri == null || _lastUriMode != SelectedMode) return null;
+                return new Uri(_lastUri);
+            }
         }
 
         private static async Task<bool> ProbeAsync(string url)
@@ -374,21 +380,20 @@ namespace OneSentenceTile
                 + "&attrAlign=" + Uri.EscapeDataString(AttrAlign);
         }
 
-        /// <summary>拉取内容用的地址：强制带标题和出处，方便 App 本地重建 XML。</summary>
-        public static async Task<Uri> ResolveContentAsync()
-        {
-            var uri = await ResolveAsync();
-            var text = uri.AbsoluteUri;
-            return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
-        }
-
         /// <summary>
-        /// Worker 的内容地址。Worker 是实时源（每次请求现取），只在 Pages 过期、
-        /// 官方 API 也取不到时兜底用，App 对它不做任何改动。
+        /// Worker 的内容地址。Worker 是实时源（每次请求现取），
+        /// 官方一言取不到、或者 Pages 过期时兜底用，App 对它不做任何改动。
         /// </summary>
         public static Uri WorkerContentUri()
         {
             var text = WithStyle(WithType(Worker));
+            return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
+        }
+
+        /// <summary>Pages 的内容地址（带时间戳绕开 CDN 缓存）。</summary>
+        public static Uri PagesContentUri()
+        {
+            var text = WithStyle(WithCacheBust(WithType(Pages)));
             return new Uri(text + (text.Contains("?") ? "&" : "?") + "showTitle=1&showAttr=1");
         }
 

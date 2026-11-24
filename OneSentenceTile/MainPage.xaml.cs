@@ -50,8 +50,11 @@ namespace OneSentenceTile
             }
             catch { }
 
-            // 一次性迁移：对齐默认值从「居中」改成「标题靠左 / 出处靠右」
-            if (GetString("settingsRev", "") != "5")
+            // 一次性迁移：按 settingsRev 逐版本补齐默认值，已经迁过的用户不会再被覆盖
+            var rev = 0;
+            int.TryParse(GetString("settingsRev", "0"), out rev);
+
+            if (rev < 5)
             {
                 // 默认：标题靠左、出处靠右、标题特大34、正文中20、出处小15
                 SetString("tileTitleAlign", "left");
@@ -60,18 +63,33 @@ namespace OneSentenceTile
                 SetString("tileQuoteStyle", "base");
                 SetString("tileAttrStyle", "captionSubtle");
                 SetBool("tileOn", true);
-                SetBool("preferWorker", true);
                 SetBool("tileShowTitle", true);
                 SetBool("tileShowAttr", true);
-                SetString("settingsRev", "5");
+                rev = 5;
             }
+
+            if (rev < 6)
+            {
+                // 磁贴源从「Worker / Pages 两档开关」改成官方一言 / Worker / Pages 三选一，
+                // 默认走官方一言（v1.hitokoto.cn）；旧的 preferWorker 不再使用
+                SetString("tileSource", TileSource.Mode.Hitokoto);
+                try
+                {
+                    var values = ApplicationData.Current.RoamingSettings.Values;
+                    if (values.ContainsKey("preferWorker")) values.Remove("preferWorker");
+                }
+                catch { }
+                rev = 6;
+            }
+
+            SetString("settingsRev", rev.ToString());
 
             FillTileStyleCombos();
             FillUiSizeCombos();
 
             _loading = true;
             isTileFresh.IsOn = GetBool("tileOn", true);
-            isWorkerFirst.IsOn = TileSource.PreferWorker;
+            SelectComboByTag(tileSourceCombo, TileSource.SelectedMode);
             isDisplayRequest.IsOn = GetBool("keepOn", false);
             isfullScreen.IsOn = GetBool("fullscreen", false);
             BackGroundColorRedSlider.Value = GetDouble("bgR", 255);
@@ -267,51 +285,75 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 拉一次内容并推给磁贴。顺序：
-        ///   1. 解析出来的源（Pages 快照过期时直接跳过）；
-        ///   2. 一言官方 API（v1.hitokoto.cn，直连，国内一般可达）；
-        ///   3. Worker（实时源，保持原样）。
-        /// 这样 Pages 停更时磁贴也不会卡在几小时前那条。
+        /// 按设置里选中的磁贴源依次尝试，谁先拿到内容就推谁：
+        ///   官方一言 → Worker → Pages
+        ///   Worker   → Pages  → 官方一言
+        ///   Pages    → 官方一言 → Worker（Pages 快照停更时直接跳过，别推几小时前的旧内容）
         /// </summary>
         private async Task<bool> RefreshTileOnceAsync()
         {
-            bool ok = false;
-            try
+            var mode = TileSource.SelectedMode;
+            var ok = false;
+            var usedLabel = "";
+            var pagesStale = false;
+
+            foreach (var step in SourceOrder(mode))
             {
-                var contentUri = await TileSource.ResolveContentAsync();
-                // 已经确定是过期快照就别推了，直接走下面的兜底
-                if (!TileSource.PickedIsStale)
+                if (step == TileSource.Mode.Pages)
                 {
-                    ok = await PushTileNowAsync(contentUri);
+                    if (!await TileSource.PagesFreshAsync())
+                    {
+                        pagesStale = true;
+                        continue;
+                    }
+                    if (await PushTileNowAsync(TileSource.PagesContentUri()))
+                    {
+                        ok = true;
+                        usedLabel = TileSource.ModeName(TileSource.Mode.Pages);
+                        break;
+                    }
                 }
-            }
-            catch { }
-
-            bool directUsed = false;
-            bool workerUsed = false;
-
-            if (!ok)
-            {
-                // 兜底 1：一言官方 API
-                var quote = await TileSource.FetchHitokotoAsync();
-                if (quote != null)
+                else if (step == TileSource.Mode.Worker)
                 {
-                    directUsed = PushTileXml(BuildTileXml(
-                        DailyTitleWithColon, quote.Text, TileSource.FormatAttribution(quote.Who, quote.From)));
-                    if (directUsed) ok = true;
+                    if (await PushTileNowAsync(TileSource.WorkerContentUri()))
+                    {
+                        ok = true;
+                        usedLabel = TileSource.ModeName(TileSource.Mode.Worker);
+                        break;
+                    }
                 }
-            }
-
-            if (!ok && TileSource.SourceLabel != "Worker")
-            {
-                // 兜底 2：Worker（刚才没试过它才试，别重复请求）
-                workerUsed = await PushTileNowAsync(TileSource.WorkerContentUri());
-                if (workerUsed) ok = true;
+                else
+                {
+                    // 官方一言只给文字，排版由 App 本地重建
+                    var quote = await TileSource.FetchHitokotoAsync();
+                    if (quote != null && PushTileXml(BuildTileXml(
+                            DailyTitleWithColon, quote.Text,
+                            TileSource.FormatAttribution(quote.Who, quote.From))))
+                    {
+                        ok = true;
+                        usedLabel = TileSource.ModeName(TileSource.Mode.Hitokoto);
+                        break;
+                    }
+                }
             }
 
             UpdateAlignAvailability();
-            UpdateTileStatus(directUsed, workerUsed);
+            UpdateTileStatus(mode, usedLabel, pagesStale);
             return ok;
+        }
+
+        /// <summary>选中的源排第一，后面按「官方 → Worker → Pages」的固定顺序兜底。</summary>
+        private static IEnumerable<string> SourceOrder(string mode)
+        {
+            if (mode == TileSource.Mode.Pages)
+            {
+                return new[] { TileSource.Mode.Pages, TileSource.Mode.Hitokoto, TileSource.Mode.Worker };
+            }
+            if (mode == TileSource.Mode.Worker)
+            {
+                return new[] { TileSource.Mode.Worker, TileSource.Mode.Pages, TileSource.Mode.Hitokoto };
+            }
+            return new[] { TileSource.Mode.Hitokoto, TileSource.Mode.Worker, TileSource.Mode.Pages };
         }
 
         /// <summary>
@@ -324,8 +366,8 @@ namespace OneSentenceTile
             tileAttrAlignCombo.IsEnabled = true;
         }
 
-        /// <summary>界面上说明「现在用的是哪个源、内容有多新、走了哪条兜底」。</summary>
-        private void UpdateTileStatus(bool directUsed, bool workerUsed)
+        /// <summary>界面上说明「选的是哪个源、实际用了哪个、内容有多新」。</summary>
+        private void UpdateTileStatus(string mode, string usedLabel, bool pagesStale)
         {
             if (tileStatusText == null) return;
             if (!isTileFresh.IsOn)
@@ -334,23 +376,24 @@ namespace OneSentenceTile
                 return;
             }
 
-            var text = "磁贴源：" + TileSource.SourceLabel;
+            var text = "磁贴源：" + TileSource.ModeName(mode);
             var age = TileSource.PagesAgeMinutes;
-            if (TileSource.SourceLabel == "Pages" && age >= 0)
+            if (usedLabel == TileSource.ModeName(TileSource.Mode.Pages) && age >= 0)
             {
                 text += "（快照 " + FormatAge(age) + "前生成）";
             }
-            if (directUsed)
+
+            if (usedLabel.Length > 0 && usedLabel != TileSource.ModeName(mode))
             {
-                text += "；快照停更，已改用一言官方 API";
+                text += "；已自动改用 " + usedLabel;
             }
-            else if (workerUsed)
+            if (pagesStale)
             {
-                text += "；已改用 Worker 实时源";
+                text += "；Pages 快照停更，已跳过";
             }
-            else if (TileSource.PickedIsStale)
+            if (usedLabel.Length == 0)
             {
-                text += "；快照停更，官方与 Worker 都取不到，暂时沿用旧内容";
+                text += "；三个源都取不到，磁贴沿用上一次的内容";
             }
             tileStatusText.Text = text;
         }
@@ -522,12 +565,14 @@ namespace OneSentenceTile
         }
 
 
-        private async void isWorkerFirst_Toggled(object sender, RoutedEventArgs e)
+        private async void tileSourceCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            var item = tileSourceCombo.SelectedItem as ComboBoxItem;
+            if (item == null) return;
+            TileSource.SelectedMode = (string)item.Tag;
             if (_loading) return;
-            TileSource.PreferWorker = isWorkerFirst.IsOn;
-            await ApplyTileAsync();
-            await LoadDailyQuoteAsync();
+            await ApplyTileAsync();       //换源立刻重推一次磁贴
+            await LoadDailyQuoteAsync();  //界面上的句子也跟着换
         }
 
         private async void hitokotoTypeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -543,24 +588,29 @@ namespace OneSentenceTile
         // ------------------------------------------------------------ 每日一言
         private async Task LoadDailyQuoteAsync()
         {
-            // Pages 快照过期时别拿旧句子糊弄界面，直接去问一言
-            if (!TileSource.PickedIsStale)
+            // 和磁贴同一套顺序：选中的源优先，取不到再依次换，Pages 停更时跳过
+            foreach (var step in SourceOrder(TileSource.SelectedMode))
             {
-                Uri uri = await TileSource.ResolveAsync();
-                if (await ShowQuoteFromUriAsync(uri)) return;
+                if (step == TileSource.Mode.Pages)
+                {
+                    if (!await TileSource.PagesFreshAsync()) continue;
+                    if (await ShowQuoteFromUriAsync(TileSource.PagesContentUri())) return;
+                }
+                else if (step == TileSource.Mode.Worker)
+                {
+                    if (await ShowQuoteFromUriAsync(TileSource.WorkerContentUri())) return;
+                }
+                else
+                {
+                    var quote = await TileSource.FetchHitokotoAsync();
+                    if (quote != null)
+                    {
+                        dailyQuoteText.Text = quote.Text;
+                        dailyQuoteFrom.Text = TileSource.FormatAttribution(quote.Who, quote.From);
+                        return;
+                    }
+                }
             }
-
-            // 兜底 1：一言官方 API
-            var quote = await TileSource.FetchHitokotoAsync();
-            if (quote != null)
-            {
-                dailyQuoteText.Text = quote.Text;
-                dailyQuoteFrom.Text = TileSource.FormatAttribution(quote.Who, quote.From);
-                return;
-            }
-
-            // 兜底 2：Worker
-            if (await ShowQuoteFromUriAsync(TileSource.WorkerContentUri())) return;
 
             dailyQuoteText.Text = "（暂时取不到每日一言，请检查网络）";
             dailyQuoteFrom.Text = "";
