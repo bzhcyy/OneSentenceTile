@@ -190,7 +190,7 @@ namespace OneSentenceTile
         // ------------------------------------------------------------ 磁贴
 
 
-        /// <summary>刷新间隔：Realtime = App 现拉现推；其余走系统周期更新。</summary>
+        /// <summary>刷新间隔。实时模式在应用内立即刷新，并使用系统允许的最短 30 分钟周期作为关闭应用后的后台兜底。</summary>
         private string TileIntervalTag
         {
             get
@@ -270,41 +270,38 @@ namespace OneSentenceTile
 
             try { updater.StopPeriodicUpdate(); } catch { }
 
-            if (TileIntervalTag == "Realtime")
-            {
-                // 实时：App 现拉 XML，按设置重建排版后立刻推给磁贴
-                StopTileTimer();
-                await RefreshTileOnceAsync();
-            }
-            else
-            {
-                // 定时：先立刻推一次（选完就能看到效果），再交给系统按周期兜底
-                await RefreshTileOnceAsync();
+            // 不论选择「实时」还是固定间隔，都先立即刷新一次。
+            await RefreshTileOnceAsync();
 
-                // 用刚才 RefreshTileOnceAsync 已经解析好的地址，别重复探测
-                var uri = TileSource.LastResolvedUri;
-                if (uri == null) uri = await TileSource.ResolveAsync();
-                PeriodicUpdateRecurrence recurrence;
-                if (!IntervalMap.TryGetValue(TileIntervalTag, out recurrence))
-                {
-                    recurrence = PeriodicUpdateRecurrence.HalfHour;
-                }
-                try
-                {
-                    updater.StartPeriodicUpdate(uri, recurrence);
-                }
-                catch { }
+            // Windows 的系统磁贴后台更新只接受 XML URL，不能直接请求官方一言 JSON。
+            // 「实时」也必须注册系统周期更新，否则关闭 App / 重启后完全没有后台刷新。
+            // Windows 最短周期为 30 分钟，因此实时模式的后台兜底按 30 分钟执行。
+            var intervalTag = TileIntervalTag;
+            var periodicTag = intervalTag == "Realtime" ? "HalfHour" : intervalTag;
+            var uri = TileSource.LastResolvedUri;
+            if (uri == null) uri = await TileSource.ResolveAsync();
 
-                // App 开着的时候，按这个间隔自己推，排版才能跟随设置
-                StartTileTimer(IntervalMinutes(TileIntervalTag));
+            PeriodicUpdateRecurrence recurrence;
+            if (!IntervalMap.TryGetValue(periodicTag, out recurrence))
+                recurrence = PeriodicUpdateRecurrence.HalfHour;
+
+            try
+            {
+                updater.StartPeriodicUpdate(uri, recurrence);
             }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("注册磁贴后台周期更新失败：" + ex);
+            }
+
+            // App 开着时也按有效周期刷新；实时模式采用系统支持的最短 30 分钟。
+            StartTileTimer(IntervalMinutes(periodicTag));
         }
 
         /// <summary>
-        /// 按固定优先级依次尝试，谁先拿到内容就推谁：
-        ///   官方一言 → Worker → Pages
-        ///   Worker   → Pages  → 官方一言
-        ///   Pages    → 官方一言 → Worker（Pages 快照停更时直接跳过，别推几小时前的旧内容）
+        /// 先尝试用户在设置中明确选择的源，再按该源的回退顺序尝试其他源。
+        /// 官方一言：API → Worker → Pages；Worker：Worker → Pages → API；
+        /// Pages：Pages → API → Worker（过期 Pages 会在调用处跳过）。
         /// </summary>
         private async Task<bool> RefreshTileOnceAsync()
         {
@@ -316,8 +313,8 @@ namespace OneSentenceTile
             {
                 if (step == TileSource.Mode.Pages)
                 {
-                    // Pages 是静态快照，停更时直接跳过，别推几小时前的旧内容
-                    if (!await TileSource.PagesFreshAsync()) continue;
+                    // 用户明确选择 Pages 时尊重选择；只有 Pages 作为自动回退源时才跳过过期快照。
+                    if (mode != TileSource.Mode.Pages && !await TileSource.PagesFreshAsync()) continue;
                     if (await PushTileNowAsync(TileSource.PagesContentUri()))
                     {
                         ok = true;
@@ -354,9 +351,12 @@ namespace OneSentenceTile
             return ok;
         }
 
-        /// <summary>固定优先级：官方一言 API → Cloudflare Worker → GitHub Pages。</summary>
         private static IEnumerable<string> SourceOrder(string mode)
         {
+            if (mode == TileSource.Mode.Worker)
+                return new[] { TileSource.Mode.Worker, TileSource.Mode.Pages, TileSource.Mode.Hitokoto };
+            if (mode == TileSource.Mode.Pages)
+                return new[] { TileSource.Mode.Pages, TileSource.Mode.Hitokoto, TileSource.Mode.Worker };
             return new[] { TileSource.Mode.Hitokoto, TileSource.Mode.Worker, TileSource.Mode.Pages };
         }
 

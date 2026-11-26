@@ -81,9 +81,9 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 启动时按设置里选中的磁贴源，给系统周期更新挑一个「现成 XML」地址：
-        /// 官方一言模式用 Worker 实时 XML 顶替（官方 API 是 JSON，系统拉不了），
-        /// 选 Pages 则用 Pages 快照，连不上都会自动退到另一个。异步探测，不阻塞界面。
+        /// 启动时为系统周期更新注册可直接读取的 XML 地址。
+        /// 官方 API 是 JSON，系统不能直接解析，因此官方一言模式在后台使用 Worker / Pages XML。
+        /// 即使设置为「实时」，也注册 Windows 最短 30 分钟周期，避免关 App 或重启后停止更新。
         /// </summary>
         private async void ConfigureTileSource()
         {
@@ -111,8 +111,10 @@ namespace OneSentenceTile
                     interval = "HalfHour";
                     values["tileInterval"] = interval;
                 }
+                // 实时只代表 App 打开时立即拉取；关闭 App 后 Windows 最短只能每 30 分钟拉一次。
+                var periodicInterval = interval == "Realtime" ? "HalfHour" : interval;
                 Windows.UI.Notifications.PeriodicUpdateRecurrence recurrence;
-                switch (interval)
+                switch (periodicInterval)
                 {
                     case "HalfHour":
                         // Windows 磁贴周期更新的最短系统间隔为 30 分钟。
@@ -131,9 +133,9 @@ namespace OneSentenceTile
                         recurrence = PeriodicUpdateRecurrence.Daily;
                         break;
                     default:
-                        // 实时模式只在应用运行时刷新，不注册关闭应用后的周期更新。
-                        System.Diagnostics.Debug.WriteLine("磁贴处于实时模式，不注册系统周期更新。");
-                        return;
+                        recurrence = PeriodicUpdateRecurrence.HalfHour;
+                        periodicInterval = "HalfHour";
+                        break;
                 }
 
                 // 系统周期更新必须使用可直接返回 Tile XML 的 HTTPS 地址。
@@ -144,10 +146,12 @@ namespace OneSentenceTile
                 values = ApplicationData.Current.RoamingSettings.Values;
                 var currentTileOn = values["tileOn"];
                 if (currentTileOn != null && !(bool)currentTileOn) return;
-                if ((values["tileInterval"] as string ?? "Realtime") != interval) return;
+                var currentInterval = values["tileInterval"] as string ?? "Realtime";
+                if (currentInterval == "QuarterHour") currentInterval = "HalfHour";
+                if (currentInterval != interval) return;
 
                 updater.StartPeriodicUpdate(uri, recurrence);
-                System.Diagnostics.Debug.WriteLine("已注册系统磁贴周期更新：" + interval + "；源：" + uri);
+                System.Diagnostics.Debug.WriteLine("已注册系统磁贴周期更新：" + periodicInterval + "（设置：" + interval + "）；源：" + uri);
             }
             catch (Exception ex)
             {

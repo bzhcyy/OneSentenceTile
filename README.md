@@ -186,3 +186,11 @@ GPL-3.0，继承自 [chenxuuu/add-one-second-UWP](https://github.com/chenxuuu/ad
 ### 默认磁贴字号
 
 新安装默认排版：标题「大 24」（`title`）、正文「标准 15」（`base`）、出处「极小·淡 12」（`captionSubtle`）。Pages 生成配置、Cloudflare Worker 无参数默认值和应用首次启动默认值保持一致。更新 GitHub Pages 需要推送仓库并等待 `tile-pages.yml` 部署完成；更新 Worker 需要重新部署 `cloudflare-worker/worker.js`。
+
+
+## 磁贴来源与后台刷新说明
+
+- 应用运行时，磁贴源下拉框会真正决定首选来源：官方一言为 `API → Worker → Pages`；Worker 为 `Worker → Pages → API`；Pages 为 `Pages → API → Worker`。
+- Windows 系统周期更新只能直接下载磁贴 XML，不能解析官方一言 API 返回的 JSON。因此应用关闭后，官方一言模式使用 Worker XML，Worker / Pages 模式则优先使用用户选中的 XML 源。
+- 「实时」模式仍会在应用打开或手动切换设置时立即刷新；为避免关闭应用或重启后停止更新，也会注册 Windows 支持的最短 30 分钟后台周期。Windows 负责调度，实际刷新时间可能延后。
+- 若设置中的「动态磁贴」开关关闭，应用会停止后台周期更新；重新开启后会立即刷新并重新注册。

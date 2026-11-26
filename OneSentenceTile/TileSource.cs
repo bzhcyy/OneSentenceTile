@@ -10,10 +10,10 @@ namespace OneSentenceTile
 {
     /// <summary>
     /// 磁贴内容来源：官方一言 / Worker / Pages 三个，用户在设置里三选一，
-    /// 选中的那个取不到就按固定顺序换下一个。
+    /// 每次先尝试用户选中的来源，再按该来源对应的顺序回退。
     ///
     /// 官方一言：https://v1.hitokoto.cn  直连 JSON，App 自己拼磁贴；国内一般可达，
-    ///          但系统「周期更新」只认 XML 地址，所以 App 关掉后由 Worker 顶替。
+    ///          但系统「周期更新」只认 XML 地址，所以 App 关闭后由 Worker / Pages XML 顶替。
     ///
     /// Worker：https://onesentencetile.onesentencetile.workers.dev/tile.xml
     ///         每次请求现取「每日一言」，永远新鲜；支持 ?type=x 选分类。
@@ -119,32 +119,37 @@ namespace OneSentenceTile
         }
 
         /// <summary>
-        /// 给 Windows 系统「周期更新」选择 XML 地址。官方 API 返回 JSON，
-        /// 系统无法直接解析，因此应用关闭时按 Worker → Pages 的顺序回退。
-        /// 官方 API 仍是应用运行时的第一优先级。
+        /// 给 Windows 系统「周期更新」选择 XML 地址。官方 API 返回 JSON，系统不能直接解析。
+        /// 后台源仍遵循用户选择：选择 Worker 就先探测 Worker，选择 Pages 就先探测 Pages；
+        /// 选择官方 API 时，后台改用 Worker → Pages 作为 XML 代理源。
         /// </summary>
         public static async Task<Uri> ResolveAsync()
         {
-            string first = Worker;
-            string second = Pages;
-
-            if (await ProbeAsync(WithType(first)))
-            {
-                _picked = first;
-            }
-            else if (await ProbeAsync(WithType(second)))
-            {
-                _picked = second;
-            }
+            var mode = SelectedMode;
+            string[] candidates;
+            if (mode == Mode.Pages)
+                candidates = new[] { Pages, Worker };
             else
+                // 官方 API 没有 XML 输出；官方 API 模式和 Worker 模式的后台首选均为 Worker。
+                candidates = new[] { Worker, Pages };
+
+            _picked = candidates[candidates.Length - 1]; // 全部探测失败时保留最后一个地址供系统后续重试
+            foreach (var candidate in candidates)
             {
-                _picked = second; // 两个 XML 源都探测失败时保留 Pages 作为系统重试地址
+                // 用户明确选择 Pages 时尊重选择；Pages 仅作为其他来源的回退时才检查新鲜度。
+                if (candidate == Pages && mode != Mode.Pages && !await PagesFreshAsync())
+                    continue;
+
+                if (await ProbeAsync(WithType(candidate)))
+                {
+                    _picked = candidate;
+                    break;
+                }
             }
 
-            // 静态托管走 CDN（10 分钟）、磁贴又被系统按 URL 缓存，所以挂个时间戳；
-            // Pages 快照是否过期由界面用 PagesFreshAsync 另行判断，这里只管地址。
+            // Pages 静态托管走 CDN，挂时间戳以避免周期请求一直命中旧缓存。
             _lastUri = WithStyle(WithCacheBust(WithType(_picked)));
-            _lastUriMode = SelectedMode;
+            _lastUriMode = mode;
             return new Uri(_lastUri);
         }
 
